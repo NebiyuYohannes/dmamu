@@ -1,24 +1,24 @@
-# Use a lightweight Python base
-FROM python:3.12-slim
+# Use fixed Python version
+FROM python:3.12.3-slim-bullseye
 
-# Avoid Python writing pyc files and buffer stdout/stderr
+# Prevent .pyc and buffer stdout
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set working directory in the container
 WORKDIR /app
 
-# Install uv package manager
-RUN pip install --no-cache-dir uv
+# Install uv (fixed version)
+RUN pip install --no-cache-dir "uv==0.9.26"
 
-# Copy dependency files first (to leverage caching)
+# Copy pyproject + lock first to leverage Docker cache
 COPY pyproject.toml uv.lock ./
 
-# Install all dependencies according to lockfile
+# Install dependencies exactly as locked
 RUN uv sync --frozen
 
-# Copy the rest of the project code
+# Copy the app code
 COPY . .
 
-# Command to run Django backend with Gunicorn
+# Expose port and run Gunicorn
+EXPOSE 8000
 CMD ["gunicorn", "habsify.wsgi:application", "--bind", "0.0.0.0:8000"]
