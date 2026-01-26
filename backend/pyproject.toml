@@ -9,8 +9,8 @@ dependencies = [
     "django>=6.0.1",
     "django-allauth>=65.14.0",
     "django-environ>=0.12.0",
+    "psycopg>=3.3.2",
     "djangorestframework>=3.16.1",
-    "psycopg[binary]>=3.3.2",
     "python-decouple>=3.8",
     "redis>=7.1.0",
 ]
