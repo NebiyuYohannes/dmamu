@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml uv.lock ./
 
 # Install deps into .venv (runtime only, no editable project, no dev)
-RUN uv sync
+RUN uv venv --python /usr/local/bin/python3.12 .venv \
+    && . .venv/bin/activate \
+    && uv sync --frozen
 
 # Copy the rest of the code
 COPY . .
