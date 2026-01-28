@@ -28,6 +28,7 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES,default=ROLE_BUSINESS_ADMIN)
     email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=20, unique=True, blank=True, null=True)
     company = models.ForeignKey(
         Company,
         null=True,
