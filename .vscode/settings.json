@@ -5,6 +5,8 @@
   "python.terminal.activateEnvironment": true,
     "cSpell.words": [
         "djoser",
-        "habsify"
+        "habsify",
+        "modelfields",
+        "phonenumber"
     ]
 }

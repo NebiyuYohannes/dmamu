@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'djoser',
-
+    'phonenumber_field',
     # Your apps
     'accounts',
     'core',
@@ -133,7 +133,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-AUTH_USER_MODEL = "core.User"
+AUTH_USER_MODEL = "accounts.User"
+
 BASE_URL=config("BASE_URL", default="http://localhost:8000")
 
 REST_FRAMEWORK = {
