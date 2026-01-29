@@ -3,10 +3,8 @@ from rest_framework import serializers
 from core.models import Company
 from accounts.utils import create_otp_for_user, send_otp_to_phone, normalize_phone
 from .models import User, PhoneNumber
-from .validators import (
-    validate_unique_email,
-    validate_unique_username,
-)
+from .validators import validate_unique_email, validate_unique_username
+
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
