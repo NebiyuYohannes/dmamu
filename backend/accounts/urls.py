@@ -1,6 +1,15 @@
 from django.urls import path
-from .views import ActivationView
+# from accounts.views import SendOTPView,VerifyOTPView, ActivationView
 
-urlpatterns = [ 
-    path('activate/<str:uid>/<str:token>/', ActivationView.as_view()),
-]
+from rest_framework.routers import DefaultRouter
+# from .views import SendOTPView, VerifyOTPView
+
+router = DefaultRouter()
+# router.register('send-otp', SendOTPView, basename='send-otp')
+# router.register('verify-otp', VerifyOTPView, basename='verify-otp')
+
+urlpatterns = router.urls
+# [
+#     *router.urls,
+#     path('activate/<str:uid>/<str:token>/', ActivationView.as_view(), name='activate'),
+# ]
