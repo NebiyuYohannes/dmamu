@@ -4,6 +4,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from phonenumber_field.modelfields import PhoneNumberField
+from core.models import Company
 
 
 def default_otp_expiry():
@@ -37,6 +38,13 @@ class User(AbstractUser):
     )
 
     verification_method = models.CharField(max_length=10, choices=VERIFICATION_CHOICES, null=True, blank=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="members"
+    )
 
     is_phone_verified = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
