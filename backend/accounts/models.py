@@ -102,6 +102,8 @@ class PhoneNumber(models.Model):
 
 
 class OTPCode(models.Model):
+    MAX_ATTEMPTS = 5
+
     TYPE_SMS = 'sms'
     TYPE_EMAIL = 'email'
     TYPE_CHOICES = [
@@ -134,7 +136,12 @@ class OTPCode(models.Model):
         if not identifier:
             identifier = self.user.email or self.user.username
         return f"OTP ({self.type}) for {identifier}"
-
+    
+    @property
+    def is_locked(self):
+        return self.attempts >= self.MAX_ATTEMPTS
+    
+    @property
     def is_expired(self):
         return timezone.now() > self.expires_at
 

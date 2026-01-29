@@ -5,7 +5,7 @@ from django.utils import timezone
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from django.conf import settings
-from accounts.models import OTPCode, Profile
+from accounts.models import OTPCode, Profile, PhoneNumber
 from phonenumber_field.phonenumber import PhoneNumber
 from rest_framework.exceptions import ValidationError
 
@@ -17,7 +17,7 @@ def generate_otp(length=6):
 
 def normalize_phone(phone_str):
     if not phone_str.startswith("+"):
-        raise ValidationError("Phone number must be in international format (+...)")
+        raise ValidationError("Invalid phone number format (e.g., use +251912345678).")
     try:
         phone = PhoneNumber.from_string(phone_str)
     except Exception:
@@ -27,9 +27,9 @@ def normalize_phone(phone_str):
         raise ValidationError("Invalid phone number")
     return phone.as_e164
 
-def send_otp_to_phone(profile: Profile, otp_code: str, otp_type=OTPCode.TYPE_SMS):
+def send_otp_to_phone(phone, otp_code: str, otp_type=OTPCode.TYPE_SMS):
     """Send OTP via Twilio SMS."""
-    if not profile.phone:
+    if not phone:
         raise ValueError("Profile has no phone number.")
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
     message_body = f"Your OTP code is {otp_code}. It expires in 10 minutes."
@@ -37,12 +37,12 @@ def send_otp_to_phone(profile: Profile, otp_code: str, otp_type=OTPCode.TYPE_SMS
         message = client.messages.create(
             body=message_body,
             from_=settings.TWILIO_PHONE_NUMBER,
-            to=str(profile.phone)
+            to=str(phone)
         )
         if message.status in ['failed', 'undelivered']:
-            logger.error(f"SMS failed for {profile.phone}: {message.error_message}")
+            logger.error(f"SMS failed for {phone}: {message.error_message}")
             raise ValueError("SMS delivery failed.")
-        logger.info(f"OTP sent to {profile.phone}")
+        logger.info(f"OTP sent to {phone}")
         return True
     except TwilioRestException as e:
         logger.error(f"Twilio error: {e}")
