@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'djoser',
     'phonenumber_field',
+    'django_ratelimit',
     # Your apps
     'accounts',
     'core',
@@ -106,6 +108,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 6}
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -135,7 +138,14 @@ STATIC_URL = 'static/'
 
 AUTH_USER_MODEL = "accounts.User"
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 BASE_URL=config("BASE_URL", default="http://localhost:8000")
+
+# Assume Ethiopia for phones
+PHONE_COUNTRY_CODE = '251'
+CURRENT_SITE_DOMAIN = BASE_URL
+
 
 REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': False,
@@ -149,13 +159,16 @@ SIMPLE_JWT = {
 }
 
 
+# Djoser settings
 DJOSER = {
+    'LOGIN_FIELD': 'email', 
+    'ACTIVATION_URL': 'auth/activate/{uid}/{token}',
     'USER_CREATE_PASSWORD_RETYPE': True,
-    'ACTIVATION_URL': 'activate/{uid}/{token}',
-    'SEND_ACTIVATION_EMAIL': True,
+    'SEND_ACTIVATION_EMAIL': False,
     'SERIALIZERS': {
-        'user_create_password_retype': 'accounts.serializers.UserCreateSerializer', 
+        'user_create_password_retype': 'accounts.serializers.UserCreateSerializer',
     },
+    
 }
 
 # Email settings SMTP
@@ -167,3 +180,26 @@ EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=EMAIL_HOST_USER)
+
+# Twilio
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER')
+
+# Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'account': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
+SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003', 'django_ratelimit.W001']
