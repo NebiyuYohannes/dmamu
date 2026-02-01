@@ -1,13 +1,18 @@
+from django.conf import settings as django_settings
+from django.utils import timezone
+from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
+from djoser.utils import encode_uid
+from djoser.email import ActivationEmail
+from rest_framework.exceptions import ValidationError
 import random
 import logging
 from datetime import timedelta
-from django.utils import timezone
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-from django.conf import settings
 from accounts.models import OTPCode, Profile, PhoneNumber
 from phonenumber_field.phonenumber import PhoneNumber
-from rest_framework.exceptions import ValidationError
+
 
 logger = logging.getLogger('account')
 
@@ -66,3 +71,21 @@ def create_otp_for_user(user, otp_type=OTPCode.TYPE_SMS):
 # def send_otp_async(profile_id, otp):
 #     profile = Profile.objects.get(id=profile_id)
 #     send_otp_to_phone(profile, otp)
+
+def send_activation_email(user, request=None):
+    uid = encode_uid(user.pk)
+    token = default_token_generator.make_token(user)
+    protocol = getattr(django_settings, "SITE_PROTOCOL", "http")
+    domain = getattr(django_settings, "SITE_DOMAIN", "localhost:8000")
+    activation_url = f"{protocol}://{domain}/{django_settings.DJOSER['ACTIVATION_URL'].format(uid=uid, token=token)}"
+
+    context = {
+        "user": user,
+        "uid": uid,
+        "token": token,
+        "protocol": protocol,
+        "domain": domain,
+        "url": activation_url,
+    }
+
+    ActivationEmail(request=request, context=context).send([user.email])
