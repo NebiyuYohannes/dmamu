@@ -2,13 +2,11 @@ from django.db import transaction
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
 from djoser.serializers import UserCreatePasswordRetypeSerializer as BaseUserCreatePasswordRetypeSerializer,ActivationSerializer as BaseActivationSerializer
-from djoser.utils import encode_uid
-from djoser.email import ActivationEmail
 from rest_framework import serializers
 from core.models import Company
 from django.utils import timezone
 from rest_framework import status
-from accounts.utils import create_otp_for_user, send_otp_to_phone, normalize_phone
+from .utils import create_otp_for_user, send_otp_to_phone, normalize_phone,send_activation_email
 from .models import User, PhoneNumber,OTPCode
 from .validators import validate_unique_email, validate_unique_username
 
@@ -61,24 +59,7 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
                     raise serializers.ValidationError("Failed to send OTP.")
             else:
                 try:
-                    uid = encode_uid(user.pk)
-                    token = default_token_generator.make_token(user)
-                    protocol = django_settings.SITE_PROTOCOL
-                    domain = django_settings.SITE_DOMAIN
-                    activation_url = f"{protocol}://{domain}/{django_settings.DJOSER['ACTIVATION_URL'].format(uid=uid, token=token)}"
-                    context = {
-                        'user': user,
-                        'uid': uid,
-                        'token': token,
-                        'protocol': protocol,
-                        'domain': domain,
-                        'url': activation_url,
-                    }
-                    request = self.context.get("request")
-                    ActivationEmail(
-                        request=request,
-                        context=context).send([user.email])
-                    # logger.info(f"Activation email sent for {user.email}")
+                    send_activation_email(user, request=self.context.get("request"))
                 except Exception as e:
                     # logger.error(f"Email send failed during signup for {user.email}: {str(e)}")
                     raise serializers.ValidationError("Failed to send activation email.")
@@ -92,66 +73,55 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
         return user
     
 
-class ActivationSerializer(BaseActivationSerializer):
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        user = self.user
-        user.is_email_verified = True
-        user.save(update_fields=["is_email_verified"])
-        return data
-
-
 class OTPVerifySerializer(serializers.Serializer):
     code = serializers.CharField(max_length=6, required=True, trim_whitespace=True)
-    
-    # Uncomment and use if you support multiple OTP purposes
-    # purpose = serializers.ChoiceField(
-    #     choices=OTPCode.PURPOSE_CHOICES,
-    #     required=True,
-    #     error_messages={"required": "OTP purpose is required."}
-    # )
 
     def validate(self, attrs):
-        request = self.context.get("request")
-        if not request: 
-            raise serializers.ValidationError("Authentication required for OTP verification.")
-
-        
         code = attrs["code"]
-        # purpose = attrs.get("purpose")  
-
+        if len(code) != 6:
+            raise serializers.ValidationError("OTP must be 6 digits")
         try:
             otp = OTPCode.objects.filter(
                 code=code,
                 used=False,
-                expires_at__gt=timezone.now(),        
-                # purpose=purpose,                     
+                expires_at__gt=timezone.now()
             ).latest("created_at")
-            if otp.user:
-                raise serializers.ValidationError("Authentication required for OTP verification.")
         except OTPCode.DoesNotExist:
-            raise serializers.ValidationError("No valid OTP found. It may have expired or already been used.")
+            raise serializers.ValidationError("No valid OTP found. It may have expired or been used.")
 
         if otp.is_locked:
             otp.mark_used()
-            raise serializers.ValidationError("Too many failed attempts. This OTP has been invalidated. Please request a new one.")
+            raise serializers.ValidationError("Too many failed attempts. OTP invalidated.")
 
         if not otp.verify(code):
-            if otp.is_locked: 
+            if otp.is_locked:
                 otp.mark_used()
                 raise serializers.ValidationError("Too many failed attempts. OTP invalidated.")
             raise serializers.ValidationError("Incorrect OTP code.")
 
         attrs["otp"] = otp
-        attrs["user"] = otp.user 
+        attrs["user"] = otp.user
         return attrs
 
-    def create(self, validated_data):
+    def verify(self, validated_data):
         otp = validated_data["otp"]
         user = validated_data["user"]
         user.is_active = True
         user.is_phone_verified = True
         user.save()
-        otp.mark_used()      
-        return {"detail": "OTP verified successfully"}
-    
+        otp.mark_used()
+        return {"message": "OTP verified successfully"}
+
+
+class ResendActivationSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        if not User.objects.filter(email=value, is_active=False).exists():
+            raise serializers.ValidationError("User not found or already active")
+        return value
+
+class SendOTPSerializer(serializers.Serializer):
+    phone = PhoneNumberSerializer()
+    email = serializers.EmailField()
+    pass
