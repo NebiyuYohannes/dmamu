@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.decorators import action
 from rest_framework import status
 from .models import User
-from .serializers import OTPVerifySerializer,SendOTPSerializer,CreatePasswordRetypeSerializer,ResendActivationSerializer
+from .serializers import OTPVerifySerializer,SendOTPSerializer,ResendActivationSerializer
 from .utils import send_activation_email
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 from rest_framework.mixins import CreateModelMixin
