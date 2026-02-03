@@ -7,10 +7,6 @@ from phonenumber_field.modelfields import PhoneNumberField
 from core.models import Company
 
 
-def default_otp_expiry():
-    return timezone.now() + timedelta(minutes=10)
-
-
 class User(AbstractUser):
     ROLE_BUSINESS_ADMIN = 'business_admin'
     ROLE_EMPLOYEE = 'employee'
@@ -33,18 +29,14 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_BUSINESS_ADMIN)
     email = models.EmailField(unique=True)
     company = models.ForeignKey(
-        "core.Company", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="users"
-    )
-
-    verification_method = models.CharField(max_length=10, choices=VERIFICATION_CHOICES, null=True, blank=True)
-    company = models.ForeignKey(
         Company,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="members"
     )
+
+    verification_method = models.CharField(max_length=10, choices=VERIFICATION_CHOICES, null=True, blank=True)
 
     is_phone_verified = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
@@ -62,14 +54,11 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    is_profile_complete = models.BooleanField(default=False)
-
-    # optional helper for OTP throttling / debugging
     last_otp_sent_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Profile for {self.user.email or self.user.username}"
+
 
 
 class PhoneNumber(models.Model):
@@ -88,13 +77,11 @@ class PhoneNumber(models.Model):
         ]
 
     def __str__(self):
-        return self.number
+        return str(self.number)
 
     def mark_verified(self):
-        """Mark this phone as verified and update the user flags."""
         self.verified_at = timezone.now()
         self.save(update_fields=['verified_at'])
-        # update user flags
         user = self.user
         user.is_phone_verified = True
         user.verification_method = user.VERIFICATION_PHONE
@@ -102,15 +89,13 @@ class PhoneNumber(models.Model):
 
 
 class OTPCode(models.Model):
-    MAX_ATTEMPTS = 5
-
     TYPE_SMS = 'sms'
     TYPE_EMAIL = 'email'
     TYPE_CHOICES = [
         (TYPE_SMS, 'SMS'),
         (TYPE_EMAIL, 'Email'),
     ]
-    
+
     PURPOSE_SIGNUP = "signup"
     PURPOSE_RESET = "reset"
     PURPOSE_VERIFY = "verify"
@@ -122,16 +107,15 @@ class OTPCode(models.Model):
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='otps')
-    code = models.CharField(max_length=6)
-    # purpose = models.CharField(max_length=10, choices=PURPOSE_CHOICES)
+    code = models.CharField(max_length=6, unique=True) 
+    purpose = models.CharField(max_length=10, choices=PURPOSE_CHOICES, default=PURPOSE_SIGNUP)
     type = models.CharField(max_length=5, choices=TYPE_CHOICES, default=TYPE_EMAIL)
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(db_index=True, default=default_otp_expiry)
+    expires_at = models.DateTimeField(db_index=True)
     used = models.BooleanField(default=False, db_index=True)
     attempts = models.PositiveIntegerField(default=0)
 
     class Meta:
-        unique_together = ('user', 'code')
         indexes = [
             models.Index(fields=['user', 'used', 'expires_at']),
             models.Index(fields=['code']),
@@ -139,43 +123,42 @@ class OTPCode(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        identifier = ''
-        try:
-            identifier = self.user.profile.phone_numbers.first().number
-        except Exception:
-            pass
-        if not identifier:
-            identifier = self.user.email or self.user.username
+        identifier = self.user.email or self.user.username
         return f"OTP ({self.type}) for {identifier}"
-    
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
+        super().save(*args, **kwargs)
+
     @property
     def is_locked(self):
-        return self.attempts >= self.MAX_ATTEMPTS
-    
+        return self.attempts >= settings.OTP_MAX_ATTEMPTS
+
     @property
     def is_expired(self):
         return timezone.now() > self.expires_at
-    
+
     def can_attempt(self):
-            return self.attempts < self.MAX_ATTEMPTS and not self.used
-    
+        return self.attempts < settings.OTP_MAX_ATTEMPTS and not self.used
+
     def remain_attempt(self):
-        return self.MAX_ATTEMPTS - self.attempts 
+        return settings.OTP_MAX_ATTEMPTS - self.attempts
 
     def verify(self, input_code: str) -> bool:
         if self.used or self.is_expired:
             return False
-
+        if not self.can_attempt():
+            self.mark_used()
+            return False
         self.attempts += 1
-
         if self.code == input_code:
             self.used = True
             self.save(update_fields=["used", "attempts"])
             return True
-
         self.save(update_fields=["attempts"])
         return False
-    
+
     def mark_used(self):
         self.used = True
         self.save(update_fields=['used'])
