@@ -1,3 +1,4 @@
+import jwt
 import random
 import logging
 from datetime import timedelta
@@ -113,3 +114,25 @@ def send_otp_email(user, otp_code, purpose, request=None):
     except Exception as e:
         logger.error(f"Failed to send OTP email to {user.email}: {e}")
         raise
+
+
+def generate_reset_token(user):
+    payload = {
+        "user_id": user.id,
+        "type": "password_reset",
+        "exp": timezone.now() + timedelta(minutes=10),
+        "iat": timezone.now(),
+    }
+
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+    return token
+
+
+
+
+
+
+
+
+
+
