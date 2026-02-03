@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
+from django.contrib.auth.hashers import check_password
 from djoser.serializers import UserCreatePasswordRetypeSerializer as BaseUserCreatePasswordRetypeSerializer
 from djoser.utils import decode_uid
 from rest_framework import serializers
@@ -165,5 +166,32 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         self.user.set_password(self.validated_data['new_password'])
         self.user.save()
 
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
 
+    def validate_new_password(self, value):
+        if len(value) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters long.")
+        return value
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["old_password"]):
+            raise serializers.ValidationError({"old_password": "Wrong password"})
         
+        if attrs["new_password"] != attrs["confirm_password"]:
+                raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        user.set_password(self.validated_data["new_password"])
+        user.save()
+        return user
+
+
+
+
+
