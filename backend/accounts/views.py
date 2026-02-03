@@ -2,7 +2,7 @@ from django.contrib.auth.tokens import default_token_generator
 from djoser.utils import decode_uid,encode_uid
 from rest_framework import viewsets, mixins
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework import status
 from .models import User,OTPCode
@@ -10,7 +10,8 @@ from .serializers import (OTPVerifySerializer,
                           ForgotPasswordSerializer, 
                           ResendActivationSerializer, 
                           CreatePasswordRetypeSerializer,
-                          PasswordResetConfirmSerializer)
+                          PasswordResetConfirmSerializer,
+                          ChangePasswordSerializer)
 from .utils import send_activation_email,generate_reset_token
 from rest_framework.viewsets import GenericViewSet
 # from ratelimit.decorators import ratelimit  
@@ -30,6 +31,8 @@ class AuthViewSet(GenericViewSet):
             return ForgotPasswordSerializer
         if self.action == "reset_password":
             return PasswordResetConfirmSerializer
+        if self.action == "change_password":
+            return ChangePasswordSerializer
         return super().get_serializer_class()
 
     # @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
@@ -45,7 +48,6 @@ class AuthViewSet(GenericViewSet):
                 raise serializers.ValidationError("Too many failed attempts. OTP invalidated.")
             raise serializers.ValidationError("Incorrect OTP code.")
         purpose = otp.purpose
-        print("=====================================================================",purpose)
         if purpose in [OTPCode.PURPOSE_SIGNUP, OTPCode.PURPOSE_VERIFY]:
             user.is_active = True
             if otp.type == OTPCode.TYPE_SMS:
@@ -127,4 +129,11 @@ class AuthViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"message": "Password reset successfully"}, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=["post"],url_path="change-password",permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        serializer = self.get_serializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"message": "Password changed successfully"},status=status.HTTP_200_OK)
 
