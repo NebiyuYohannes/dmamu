@@ -2,6 +2,7 @@ from django.db import transaction
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
 from djoser.serializers import UserCreatePasswordRetypeSerializer as BaseUserCreatePasswordRetypeSerializer
+from djoser.utils import decode_uid
 from rest_framework import serializers
 from core.models import Company
 from django.utils import timezone
@@ -141,3 +142,28 @@ class ForgotPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("User not found.")
         attrs["user"] = user
         return attrs
+    
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+    re_new_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['re_new_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        try:
+            uid_decoded = decode_uid(attrs['uid'])
+            self.user = User.objects.get(pk=uid_decoded)
+        except (User.DoesNotExist, ValueError, TypeError):
+            raise serializers.ValidationError("Invalid UID.")
+        if not default_token_generator.check_token(self.user, attrs['token']):
+            raise serializers.ValidationError("Invalid or expired token.")
+        return attrs
+
+    def save(self):
+        self.user.set_password(self.validated_data['new_password'])
+        self.user.save()
+
+
+        
