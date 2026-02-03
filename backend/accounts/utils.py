@@ -1,18 +1,18 @@
-from django.conf import settings as django_settings
-from django.utils import timezone
-from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
-from djoser.utils import encode_uid
-from djoser.email import ActivationEmail
-from rest_framework.exceptions import ValidationError
 import random
 import logging
 from datetime import timedelta
+from django.conf import settings
+from django.utils import timezone
+from django.contrib.auth.tokens import default_token_generator
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
+from djoser.utils import encode_uid
+from djoser.email import ActivationEmail
+from rest_framework.exceptions import ValidationError
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-from accounts.models import OTPCode, Profile, PhoneNumber
 from phonenumber_field.phonenumber import PhoneNumber
-
+from .models import OTPCode
 
 logger = logging.getLogger('account')
 
@@ -21,23 +21,37 @@ def generate_otp(length=6):
     return ''.join(random.choices('0123456789', k=length))
 
 def normalize_phone(phone_str):
+    """Normalize and validate a phone number string."""
     if not phone_str.startswith("+"):
         raise ValidationError("Invalid phone number format (e.g., use +251912345678).")
     try:
         phone = PhoneNumber.from_string(phone_str)
     except Exception:
-        raise ValidationError("Invalid phone number format")
-
+        raise ValidationError("Invalid phone number format.")
     if not phone.is_valid():
-        raise ValidationError("Invalid phone number")
+        raise ValidationError("Invalid phone number.")
     return phone.as_e164
 
+def create_otp_for_user(user, otp_type=OTPCode.TYPE_EMAIL, seconds=None, purpose=OTPCode.PURPOSE_SIGNUP):
+    """Create OTP with expiration and purpose."""
+    otp = generate_otp()
+    expiry_seconds = seconds or settings.OTP_EXPIRY_SECONDS  # Default from settings, e.g., 300 for 5 mins
+    expires_at = timezone.now() + timedelta(seconds=expiry_seconds)
+    otp_obj = OTPCode.objects.create(
+        user=user,
+        code=otp,
+        type=otp_type,
+        purpose=purpose,
+        expires_at=expires_at
+    )
+    return otp, otp_obj
+
 def send_otp_to_phone(phone, otp_code: str, otp_type=OTPCode.TYPE_SMS):
-    """Send OTP via Twilio SMS."""
+    """Send OTP via Twilio SMS (synchronous)."""
     if not phone:
-        raise ValueError("Profile has no phone number.")
+        raise ValueError("No phone number provided.")
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-    message_body = f"Your OTP code is {otp_code}. It expires in 10 minutes."
+    message_body = f"Your OTP code is {otp_code}. It expires in {settings.OTP_EXPIRY_SECONDS // 60} minutes."
     try:
         message = client.messages.create(
             body=message_body,
@@ -50,34 +64,16 @@ def send_otp_to_phone(phone, otp_code: str, otp_type=OTPCode.TYPE_SMS):
         logger.info(f"OTP sent to {phone}")
         return True
     except TwilioRestException as e:
-        logger.error(f"Twilio error: {e}")
+        logger.error(f"Twilio error for {phone}: {e}")
         raise
 
-def create_otp_for_user(user, otp_type=OTPCode.TYPE_SMS):
-    """Create OTP with expiration."""
-    otp = generate_otp()
-    expires_at = timezone.now() + timedelta(minutes=10)
-    otp_obj = OTPCode.objects.create(
-        user=user,
-        code=otp,
-        type=otp_type,
-        expires_at=expires_at
-    )
-    return otp, otp_obj
-
-# For async (optional: requires Celery setup)
-# from celery import shared_task
-# @shared_task
-# def send_otp_async(profile_id, otp):
-#     profile = Profile.objects.get(id=profile_id)
-#     send_otp_to_phone(profile, otp)
-
 def send_activation_email(user, request=None):
+    """Send activation email with link (synchronous)."""
     uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
-    protocol = getattr(django_settings, "SITE_PROTOCOL", "http")
-    domain = getattr(django_settings, "SITE_DOMAIN", "localhost:8000")
-    activation_url = f"{protocol}://{domain}/{django_settings.DJOSER['ACTIVATION_URL'].format(uid=uid, token=token)}"
+    protocol = getattr(settings, "SITE_PROTOCOL", "http")
+    domain = getattr(settings, "SITE_DOMAIN", "localhost:8000")
+    activation_url = f"{protocol}://{domain}/{settings.DJOSER['ACTIVATION_URL'].format(uid=uid, token=token)}"
 
     context = {
         "user": user,
@@ -89,3 +85,31 @@ def send_activation_email(user, request=None):
     }
 
     ActivationEmail(request=request, context=context).send([user.email])
+
+def send_otp_email(user, otp_code, purpose, request=None):
+    """Send OTP via email (synchronous)."""
+    context = {
+        "user": user,
+        "code": otp_code,
+        "purpose": purpose,
+        "minutes": settings.OTP_EXPIRY_SECONDS // 60,
+    }
+
+    subject = f"Your {purpose.capitalize()} Verification Code"
+
+    text_body = f"Your verification code is {otp_code}. It expires in {context['minutes']} minutes."
+    html_body = render_to_string("emails/otp_email.html", context)
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+    )
+    email.attach_alternative(html_body, "text/html")
+    try:
+        email.send()
+        logger.info(f"OTP email sent to {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send OTP email to {user.email}: {e}")
+        raise
