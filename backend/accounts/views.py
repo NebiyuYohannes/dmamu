@@ -2,7 +2,7 @@ from django.contrib.auth.tokens import default_token_generator
 from djoser.utils import decode_uid,encode_uid
 from rest_framework import viewsets, mixins
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
 from rest_framework.decorators import action
 from rest_framework import status
 from .models import User,OTPCode
@@ -12,7 +12,7 @@ from .serializers import (OTPVerifySerializer,
                           CreatePasswordRetypeSerializer,
                           PasswordResetConfirmSerializer,
                           ChangePasswordSerializer)
-from .utils import send_activation_email,generate_reset_token
+from .utils import send_activation_email
 from rest_framework.viewsets import GenericViewSet
 # from ratelimit.decorators import ratelimit  
 from django.utils.decorators import method_decorator
@@ -136,4 +136,5 @@ class AuthViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"message": "Password changed successfully"},status=status.HTTP_200_OK)
+
 
