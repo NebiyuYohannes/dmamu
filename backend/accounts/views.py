@@ -5,14 +5,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
 from rest_framework.decorators import action
 from rest_framework import status
-from .models import User,OTPCode
+from .models import User,OTPCode,Profile
 from .serializers import (OTPVerifySerializer, 
                           ForgotPasswordSerializer, 
                           ResendActivationSerializer, 
                           CreatePasswordRetypeSerializer,
                           PasswordResetConfirmSerializer,
-                          ChangePasswordSerializer)
-from .utils import send_activation_email
+                          ChangePasswordSerializer,ProfileSerializer)
+from .utils import send_activation_email,generate_reset_token
 from rest_framework.viewsets import GenericViewSet
 # from ratelimit.decorators import ratelimit  
 from django.utils.decorators import method_decorator
@@ -137,4 +137,27 @@ class AuthViewSet(GenericViewSet):
         serializer.save()
         return Response({"message": "Password changed successfully"},status=status.HTTP_200_OK)
 
+class ProfileViewSet(viewsets.ModelViewSet):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAdminUser]
+
+    @action(detail=False, methods=['get', 'put'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            print(Profile.objects.get(user=request.user), "=============================================")
+            profile = Profile.objects.get(user=request.user)
+
+        except Profile.DoesNotExist:
+            return Response({"detail": "Profile not found."}, status=404)
+        
+        if request.method == 'GET':
+            serializer = ProfileSerializer(profile)
+            return Response(serializer.data)
+        
+        if request.method == 'PUT':
+            serializer = ProfileSerializer(profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
 
