@@ -2,7 +2,8 @@ from django.db import transaction
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
 from django.contrib.auth.hashers import check_password
-from djoser.serializers import UserCreatePasswordRetypeSerializer as BaseUserCreatePasswordRetypeSerializer
+from djoser.serializers import (UserCreatePasswordRetypeSerializer as BaseUserCreatePasswordRetypeSerializer,
+                                TokenCreateSerializer as BaseTokenCreateSerializer)
 from djoser.utils import decode_uid
 from rest_framework import serializers
 from core.models import Company
@@ -11,6 +12,8 @@ from rest_framework import status
 from .utils import create_otp_for_user, send_otp_to_phone, normalize_phone, send_activation_email, send_otp_email
 from .models import User, PhoneNumber, OTPCode,Profile
 from .validators import validate_unique_email, validate_unique_username
+from django.contrib.auth import authenticate
+
 
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
@@ -282,7 +285,7 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
         company = request.user.company
 
         user = User.objects.create(
-            is_active=False,
+            is_active=True,
             role=User.ROLE_EMPLOYEE,
             company=company,
             **validated_data
@@ -297,7 +300,3 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
         )
 
         return user
-
-
-
-
