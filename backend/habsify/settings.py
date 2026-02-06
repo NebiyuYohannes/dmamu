@@ -144,6 +144,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 BASE_URL=config("BASE_URL", default="localhost:8000")
 SITE_DOMAIN=config("SITE_DOMAIN", default="localhost:8000")
 SITE_PROTOCOL=config("SITE_PROTOCOL", default="http")
+LOGIN_FIELD="email"
 
 # Assume Ethiopia for phones
 PHONE_COUNTRY_CODE = '251'
