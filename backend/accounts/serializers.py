@@ -13,6 +13,7 @@ from .utils import create_otp_for_user, send_otp_to_phone, normalize_phone, send
 from .models import User, PhoneNumber, OTPCode,Profile
 from .validators import validate_unique_email, validate_unique_username
 from django.contrib.auth import authenticate
+from subscriptions.models import Subscription
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -253,10 +254,30 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
                 "re_password": "Passwords do not match."
             })
 
-        if len(password) < 8:
+        if password is not None and len(password) < 8: 
             raise serializers.ValidationError({
                 "password": "Password must be at least 8 characters long."
             })
+
+        user = self.context["request"].user
+
+        if user.company is None:
+            raise serializers.ValidationError("User must be associated with a company.")
+
+        check_company = user.company    
+
+        try:
+            check_subs = user.company.subscription
+        except Subscription.DoesNotExist:
+            raise serializers.ValidationError("Company has no subscription.")
+
+        if not check_subs.active:
+            raise serializers.ValidationError("Subscription is not active.")
+
+        if check_company.member_count >= check_subs.plan.user_limit:
+            raise serializers.ValidationError(
+                "Employee limit reached for your subscription."
+            )
 
         return attrs
 
