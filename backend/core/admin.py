@@ -18,10 +18,10 @@ class CompanyAdmin(admin.ModelAdmin):
     list_editable = ('is_active',)
     search_fields = ('name',)
 
-    # override queryset to annotate member count
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        qs = qs.select_related('owner', 'subscription', 'subscription__plan')
+        qs = qs.select_related('owner')  # forward FK
+        qs = qs.select_related('subscription__plan')  # reverse OneToOne + FK
         qs = qs.annotate(member_total=Count('members'))
         return qs
 
