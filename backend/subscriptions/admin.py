@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from django.db import transaction
 from .models import SubscriptionPlan, Subscription, PaymentMethod, Payment, BankAccount, Feature
 
 # Register Feature simply
@@ -44,11 +45,11 @@ class PaymentInline(admin.TabularInline):
 # SubscriptionAdmin: Admin can add new subscriptions with company, plan (incl. price), start/end dates (for duration), etc.
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('company', 'plan', 'start_date', 'end_date', 'active')
+    list_display = ('company', 'plan', 'start_date', 'end_date', 'active', 'status')    
     list_filter = ('active', 'plan')
     autocomplete_fields = ['company','plan']
     search_fields = ('company__name', 'plan__name')
-    list_editable = ('active',)
+    list_editable = ('active','status')
     readonly_fields = ('start_date',)
     fieldsets = (
         (None, {'fields': ('company', 'plan', 'start_date', 'end_date')}),
@@ -73,7 +74,7 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ('subscription', 'amount', 'payment_method', 'transaction_id', 'proof_link', 'approved', 'created_at')
     list_filter = ('approved', 'payment_method')
     search_fields = ('transaction_id', 'subscription__company__name')
-    list_editable = ('approved',)
+    # list_editable = ('approved',)
     readonly_fields = ('created_at', 'proof_link')
 
     def proof_link(self, obj):
@@ -85,13 +86,26 @@ class PaymentAdmin(admin.ModelAdmin):
     actions = ['approve', 'reject']
 
     def approve(self, request, queryset):
-        queryset.update(approved=True)
-        self.message_user(request, "Payments approved.")
+        with transaction.atomic():
+            for payment in queryset:
+                payment.approved = True
+                payment.save()
+
+                subscription = payment.subscription
+                subscription.status = Subscription.STATUS_ACTIVE
+                subscription.save()
+        self.message_user(request, "Payments approved and subscriptions activated.")
     approve.short_description = "Approve selected"
 
     def reject(self, request, queryset):
-        queryset.update(approved=False)
-        self.message_user(request, "Payments rejected.")
+        for payment in queryset:
+            payment.approved = False
+            payment.save()
+
+            subscription = payment.subscription
+            subscription.status = Subscription.STATUS_PENDING_PAYMENT
+            subscription.save()
+        self.message_user(request, "Payments rejected and subscriptions set to pending.")
     reject.short_description = "Reject selected"
 
 # BankAccountAdmin
@@ -102,3 +116,5 @@ class BankAccountAdmin(admin.ModelAdmin):
     search_fields = ('bank_name', 'account_number')
     list_editable = ('is_active',)
     actions = ['activate', 'deactivate']
+
+    
