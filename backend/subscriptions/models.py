@@ -34,41 +34,41 @@ class SubscriptionPlan(models.Model):
 
 
 class Subscription(models.Model):
+    STATUS_TRIALING = "trialing"
+    STATUS_ACTIVE = "active"
+    STATUS_PENDING_PAYMENT = "pending_payment"
+    STATUS_EXPIRED = "expired"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_TRIALING, "Trialing"),
+        (STATUS_ACTIVE, "Active (Paid)"),
+        (STATUS_PENDING_PAYMENT, "Pending Payment"),
+        (STATUS_EXPIRED, "Expired"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
     uid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="subscription")
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT)
     start_date = models.DateField(default=date.today)
-    end_date = models.DateField(null=True, blank=True)        # None = perpetual (Starter)
+    end_date = models.DateField(null=False, blank=False)
     active = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
 
     def __str__(self):
         return f"{self.company.name} - {self.plan.name}"
 
+
     @property
     def is_currently_valid(self):
-        """Used by permission to block expired accounts"""
-        if not self.active:
+        if self.status in ['expired', 'cancelled', 'pending_payment']:
             return False
-        if self.end_date is None:           # Starter = free forever
-            return True
-        return self.end_date >= date.today()
+        return self.end_date is None or self.end_date >= date.today()   
 
     @property
     def days_remaining(self):
-        if self.end_date is None:
-            return "∞"
         return max(0, (self.end_date - date.today()).days)
-
-    @property
-    def status(self):
-        """Human readable status (optional, but very useful in admin/UI)"""
-        if not self.active:
-            return "Expired"
-        if self.end_date is None:
-            return "Free Forever"
-        if self.end_date >= date.today():
-            return "Active (Trial)" if self.days_remaining <= self.plan.trial_days else "Active (Paid)"
-        return "Expired"
 
 
 class PaymentMethod(models.Model):
