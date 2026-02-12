@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import viewsets,mixins
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +8,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import SubscriptionPlan,Subscription,Payment,PaymentMethod,BankAccount
 from .permissions import IsOwnerOrAdmin,HasValidSubscription
+from .throttles import SubscriptionGlobalThrottle,SubscribeAndPayThrottle
 from .serializers import (SubscriptionPlanSerializer,
                           SubscriptionSerializer,
                           FreeTrialSerializer,
@@ -20,13 +21,6 @@ class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
-    # @action(detail=True, methods=['post'])
-    # def cancel(self, request, uid=None):
-    #     sub = self.get_object()
-    #     sub.active = False
-    #     sub.save()
-    #     return Response({'status': 'cancelled'})
-    
 class SubscriptionViewSet(mixins.ListModelMixin,
                           mixins.RetrieveModelMixin,
                           viewsets.GenericViewSet):
@@ -35,6 +29,7 @@ class SubscriptionViewSet(mixins.ListModelMixin,
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated,IsOwnerOrAdmin]
     lookup_field = 'uid'
+    throttle_classes = [SubscriptionGlobalThrottle]
 
     def get_queryset(self):
         if self.request.user.is_staff:
@@ -48,7 +43,10 @@ class SubscriptionViewSet(mixins.ListModelMixin,
         subscription = serializer.save()
         return Response(SubscriptionSerializer(subscription).data, status=201)
 
-    @action(detail=False, methods=['post'],serializer_class=PayNowSerializer,parser_classes=(MultiPartParser, FormParser, JSONParser))
+    @action(detail=False, methods=['post'],
+            serializer_class=PayNowSerializer,
+            parser_classes=(MultiPartParser,FormParser, JSONParser),
+            throttle_classes=[SubscribeAndPayThrottle])
     def subscribe_and_pay(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -58,3 +56,27 @@ class SubscriptionViewSet(mixins.ListModelMixin,
             "status": "pending_payment",
             "message": "Payment submitted. Please wait up to 24 hours for manual approval."
         }, status=201)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsOwnerOrAdmin])
+    def cancel(self, request, uid=None):
+        subscription = self.get_object()
+
+        # Prevent cancelling if already done
+        if subscription.status in ['cancelled', 'expired']:
+            return Response({
+                "error": "This subscription is already cancelled or expired."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Cancel logic
+        subscription.status = 'cancelled'
+        subscription.active = False
+        subscription.end_date = timezone.now().date()
+        subscription.save()
+
+        return Response({
+            "status": "cancelled",
+            "message": "Your subscription has been successfully cancelled."
+        }, status=status.HTTP_200_OK)
+    @action(detail=True, methods=['post'])
+    def check(self, request, uid=None):
+        return Response({"ok":uid})
