@@ -11,6 +11,7 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
+    has_used_trial = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
