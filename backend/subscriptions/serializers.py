@@ -19,7 +19,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     plan = SubscriptionPlanSerializer(read_only=True)
     company_name = serializers.CharField(source='company.name', read_only=True)
     days_remaining = serializers.ReadOnlyField()
-    status = serializers.ReadOnlyField()
+    status = serializers.CharField(read_only=True)
 
     class Meta:
         model = Subscription
@@ -30,20 +30,29 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 class FreeTrialSerializer(serializers.Serializer):
     plan_id = serializers.IntegerField()
 
+    def validate(self, data):
+        company = self.context['request'].user.company
+        if company.has_used_trial:
+            raise serializers.ValidationError(
+                "This company has already used its free trial on a previous plan. "
+                "Please subscribe to a paid plan or contact support."
+            )
+        return data
+
     def create(self, validated_data):
         plan = SubscriptionPlan.objects.get(id=validated_data['plan_id'])
         company = self.context['request'].user.company
 
-        end_date = None if plan.price_monthly == 0 else (
-            timezone.now().date() + timedelta(days=plan.trial_days)
-        )
+        company.has_used_trial = True
+        company.save()
 
         subscription, _ = Subscription.objects.update_or_create(
             company=company,
             defaults={
                 'plan': plan,
                 'start_date': timezone.now().date(),
-                'end_date': end_date,
+                'end_date': timezone.now().date() + timedelta(days=plan.trial_days),
+                'status': 'trialing',
                 'active': True,
             }
         )
@@ -56,35 +65,34 @@ class PayNowSerializer(serializers.Serializer):
     proof = serializers.FileField(required=False)
 
     def validate(self, data):
-            request = self.context['request']
-            company = request.user.company
+        company = self.context['request'].user.company
 
-            existing = getattr(company, 'subscription', None)
-            if existing and existing.status == 'pending_payment':
-                raise serializers.ValidationError(
-                    "You already have a pending payment. "
-                    "Please wait for approval before creating a new one."
-                )
+        # Allow Pay Now even after trial (for upgrade/renew), but block if active
+        existing_sub = getattr(company, 'subscription', None)
+        if existing_sub and existing_sub.status in ['trialing', 'active']:
+            raise serializers.ValidationError(
+                "You already have an active or trialing subscription. "
+                "Please cancel it first or contact support to change plans."
+            )
 
-            if data['payment_method'].code == 'BANK':
-                if not data.get('transaction_id'):
-                    raise serializers.ValidationError({"transaction_id": "Required"})
-                if not data.get('proof'):
-                    raise serializers.ValidationError({"proof": "Please upload proof"})
+        if data['payment_method'].code == 'BANK':
+            if not data.get('transaction_id'):
+                raise serializers.ValidationError({"transaction_id": "Required"})
+            if not data.get('proof'):
+                raise serializers.ValidationError({"proof": "Please upload proof"})
 
-            return data
+        return data
 
     def create(self, validated_data):
         plan = SubscriptionPlan.objects.get(id=validated_data['plan_id'])
         company = self.context['request'].user.company
 
-        # Create / Update with pending_payment status
         subscription, _ = Subscription.objects.update_or_create(
             company=company,
             defaults={
                 'plan': plan,
-                'start_date': date.today(),
-                'end_date': date.today() + timedelta(days=30),
+                'start_date': timezone.now().date(),
+                'end_date': timezone.now().date() + timedelta(days=30),
                 'status': 'pending_payment',
                 'active': False,
             }
@@ -98,6 +106,5 @@ class PayNowSerializer(serializers.Serializer):
             proof=validated_data.get('proof'),
             approved=False,
         )
-        return subscription
-    
+        return subscription  
 
