@@ -14,11 +14,10 @@ class HasValidSubscription(BasePermission):
             return False
         if user.is_staff or user.is_superuser:
             return True
-        company = user.company
+        company = getattr(user, "company", None) 
         if not company:
             return False
         subscription = getattr(company, "subscription", None)
         if not subscription:
             return False
-
         return subscription.is_currently_valid
