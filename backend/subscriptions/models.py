@@ -64,7 +64,7 @@ class Subscription(models.Model):
     def is_currently_valid(self):
         if self.status in ['expired', 'cancelled', 'pending_payment']:
             return False
-        return self.end_date is None or self.end_date >= date.today()   
+        return self.end_date is None or self.end_date >= date.today()
 
     @property
     def days_remaining(self):
