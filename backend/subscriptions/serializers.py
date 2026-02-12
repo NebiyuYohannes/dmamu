@@ -2,7 +2,6 @@ from rest_framework import serializers
 from .models import *
 
 
-
 class FeatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feature
@@ -67,12 +66,12 @@ class PayNowSerializer(serializers.Serializer):
     def validate(self, data):
         company = self.context['request'].user.company
 
-        # Allow Pay Now even after trial (for upgrade/renew), but block if active
+        # Block if already active, trialing, OR pending (prevent spam/multiple pendings)
         existing_sub = getattr(company, 'subscription', None)
-        if existing_sub and existing_sub.status in ['trialing', 'active']:
+        if existing_sub and existing_sub.status in ['trialing', 'active', 'pending_payment']:
             raise serializers.ValidationError(
-                "You already have an active or trialing subscription. "
-                "Please cancel it first or contact support to change plans."
+                "You already have a pending, active, or trialing subscription. "
+                "Please wait for approval, cancel it, or contact support to change plans."
             )
 
         if data['payment_method'].code == 'BANK':
@@ -106,5 +105,6 @@ class PayNowSerializer(serializers.Serializer):
             proof=validated_data.get('proof'),
             approved=False,
         )
-        return subscription  
+        return subscription
+     
 
