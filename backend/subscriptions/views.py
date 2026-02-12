@@ -77,6 +77,3 @@ class SubscriptionViewSet(mixins.ListModelMixin,
             "status": "cancelled",
             "message": "Your subscription has been successfully cancelled."
         }, status=status.HTTP_200_OK)
-    @action(detail=True, methods=['post'])
-    def check(self, request, uid=None):
-        return Response({"ok":uid})
