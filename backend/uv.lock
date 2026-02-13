@@ -178,7 +178,7 @@ requires-dist = [
     { name = "celery", specifier = ">=5.6.2" },
     { name = "django", specifier = ">=6.0.1" },
     { name = "django-environ", specifier = ">=0.12.0" },
-    { name = "django-filter" },
+    { name = "django-filter", specifier = ">=25.2" },
     { name = "django-phonenumber-field", specifier = ">=8.4.0" },
     { name = "django-ratelimit", specifier = ">=4.1.0" },
     { name = "djangorestframework", specifier = ">=3.16.1" },
