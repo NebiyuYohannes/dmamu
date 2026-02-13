@@ -11,5 +11,6 @@ urlpatterns = [
     path('auth/', include('djoser.urls.jwt')),
     path('accounts/', include('accounts.urls')),
     path('subscriptions/', include('subscriptions.urls')),
+    path('crm/',include('crm.urls')),
 ]
 
