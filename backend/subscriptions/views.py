@@ -12,14 +12,14 @@ from .throttles import SubscriptionGlobalThrottle,SubscribeAndPayThrottle
 from .serializers import (SubscriptionPlanSerializer,
                           SubscriptionSerializer,
                           FreeTrialSerializer,
-                          PayNowSerializer)
+                          PayNowSerializer,
+                          PaymentMethodSerializer,
+                          BankAccountSerializer)
 
 class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SubscriptionPlan.objects.filter(is_active=True)
     serializer_class = SubscriptionPlanSerializer
     permission_classes = [IsAuthenticated]
-
-
 
 class SubscriptionViewSet(mixins.ListModelMixin,
                           mixins.RetrieveModelMixin,
@@ -77,3 +77,13 @@ class SubscriptionViewSet(mixins.ListModelMixin,
             "status": "cancelled",
             "message": "Your subscription has been successfully cancelled."
         }, status=status.HTTP_200_OK)
+    
+class PaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = PaymentMethod.objects.filter(is_active=True)
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsAuthenticated]
+
+class BankAccountViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = BankAccount.objects.filter(is_active=True)
+    serializer_class = BankAccountSerializer
+    permission_classes = [IsAuthenticated]
