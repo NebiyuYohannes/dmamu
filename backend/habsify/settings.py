@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'subscriptions',
     'crm',
     'supplier',
+    'sales_purchases',
 ]
 
 
