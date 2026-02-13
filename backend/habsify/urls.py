@@ -13,5 +13,6 @@ urlpatterns = [
     path('subscriptions/', include('subscriptions.urls')),
     path('crm/',include('crm.urls')),
     path('suppliers/',include('suppliers.urls')), 
+    path('sales-purchases/',include('sales_purchases.urls')), 
 ]
 
