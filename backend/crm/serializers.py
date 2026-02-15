@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from sales_purchases.models import Sale
 from .models import Customer,Interaction
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -17,28 +18,21 @@ class CustomerSerializer(serializers.ModelSerializer):
         return 0.00
     
     def get_transaction_history(self, obj):
-        return [
-            {
-                "date": "2025-10-20",
-                "product_code": "IND-2024-8472",
-                "units": 25,
-                "product_price": 338.00,
-                "payable": 8450.00,
-                "payment_received": 8450.00,
-                "bank": "Chase Bank",
-                "remain": 0.00
-            },
-            {
-                "date": "2025-10-15",
-                "product_code": "OFF-2024-5231",
-                "units": 15,
-                "product_price": 82.00,
-                "payable": 1230.00,
-                "payment_received": 800.00,
-                "bank": "Wells Fargo",
-                "remain": 430.00
-            },
-        ]
+        sales = Sale.objects.filter(customer=obj).order_by('-date')
+
+        history = []
+        for sale in sales:
+            history.append({
+                "date": sale.date.strftime("%b %d, %Y"),
+                "product_code": sale.item.code if sale.item else "N/A",  # Later from Inventory
+                "units": sale.quantity,
+                "product_price": float(sale.unit_price),
+                "payable": float(sale.total),
+                "payment_received": 0.00,  # Later from Finance
+                "bank": "N/A",             # Later from Finance
+                "remain": float(sale.total)  # For now, full amount unpaid
+            })
+        return history
     
 
     
