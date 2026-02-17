@@ -6,6 +6,7 @@ from suppliers.models import Supplier
 class SaleSerializer(serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all()) 
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    item = serializers.CharField(source='item.name', read_only=True)
 
     class Meta:
         model = Sale
@@ -19,7 +20,8 @@ class SaleSerializer(serializers.ModelSerializer):
 
 class PurchaseSerializer(serializers.ModelSerializer):
     supplier = serializers.PrimaryKeyRelatedField(queryset=Supplier.objects.all())   
-    supplier_name = serializers.CharField(source='supplier.name', read_only=True)  
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    item = serializers.CharField(source='item.name', read_only=True)  
 
     class Meta:
         model = Purchase
