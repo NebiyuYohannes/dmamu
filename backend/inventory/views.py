@@ -15,7 +15,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['name', 'code', 'warehouse_address']
     ordering_fields = ['name', 'current_stock', 'unit_price']
-    filterset_fields = ['category']  # Frontend "All Categories"
+    filterset_fields = ['category']
 
     def get_queryset(self):
         if self.request.user.role == 'super_admin':
