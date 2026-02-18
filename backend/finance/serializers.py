@@ -9,9 +9,11 @@ class AccountSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'full_name','account_type', 'account_number', 'balance']
 
 class TransactionSerializer(serializers.ModelSerializer):
+    bank_account = serializers.CharField(source='account.full_name',read_only=True)
     class Meta:
         model = Transaction
-        fields = ['id', 'account', 'type', 'amount', 'description', 'date', 'notes']
+        fields = ['id', 'account', 'type', 'amount', 'description', 'date', 'notes','balance_at_time','bank_account']
+        read_only_fields = ['date', 'balance_at_time']
 
     def validate(self, data):
         # Auto-update account balance

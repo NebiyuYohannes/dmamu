@@ -37,6 +37,27 @@ class Transaction(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)  
     date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
-
+    balance_at_time = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    
     def __str__(self):
         return f"{self.get_type_display()} {self.amount} on {self.date} - {self.description}"
+    
+    def save(self, *args, **kwargs):
+        if self.account:
+            # Get current balance before update
+            current_balance = self.account.balance
+
+            # Calculate new balance
+            if self.type == 'income':
+                new_balance = current_balance + self.amount
+            else:
+                new_balance = current_balance - self.amount
+
+            # Save snapshot on transaction
+            self.balance_at_time = new_balance
+
+            # Update account balance
+            self.account.balance = new_balance
+            self.account.save()
+
+        super().save(*args, **kwargs)
