@@ -1,7 +1,5 @@
 from django.db import models
 from core.models import Company
-from sales_purchases.models import Sale, Purchase 
-from suppliers.models import Supplier 
 
 class Account(models.Model):
     TYPE_CHOICES = [
@@ -32,32 +30,39 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.CharField(max_length=255)  
     reference = models.CharField(max_length=100, blank=True) 
-    linked_sale = models.ForeignKey(Sale, on_delete=models.SET_NULL, null=True, blank=True)
-    linked_purchase = models.ForeignKey(Purchase, on_delete=models.SET_NULL, null=True, blank=True)
-    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)  
     date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
     balance_at_time = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    linked_sale = models.OneToOneField(
+        'sales_purchases.Sale',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transaction' 
+    )
+    linked_purchase = models.OneToOneField(
+        'sales_purchases.Purchase',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='transaction'
+    )
     
     def __str__(self):
         return f"{self.get_type_display()} {self.amount} on {self.date} - {self.description}"
     
     def save(self, *args, **kwargs):
         if self.account:
-            # Get current balance before update
             current_balance = self.account.balance
 
-            # Calculate new balance
-            if self.type == 'income':
+            if self.type == 'inflow':
                 new_balance = current_balance + self.amount
-            else:
+            elif self.type == 'outflow':
                 new_balance = current_balance - self.amount
+            else:
+                raise ValueError(f"Unknown transaction type: {self.type}")
 
-            # Save snapshot on transaction
             self.balance_at_time = new_balance
-
-            # Update account balance
             self.account.balance = new_balance
-            self.account.save()
-
+            self.account.save(update_fields=['balance'])
         super().save(*args, **kwargs)
