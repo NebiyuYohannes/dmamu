@@ -6,9 +6,16 @@ from .models import Item, Category, StockMovement
 from .serializers import ItemListSerializer,ItemDetailSerializer,CategorySerializer,StockMovementSerializer
 
 class CategoryViewSet(mixins.CreateModelMixin,mixins.DestroyModelMixin,mixins.ListModelMixin,viewsets.GenericViewSet):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
+
+    def get_queryset(self):
+        if self.request.user.role == 'super_admin':
+            return Category.objects.all()
+        return Category.objects.filter(item_company=self.request.user.company)
+    
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
 
 class ItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasActiveSubscription]
