@@ -12,8 +12,8 @@ class CategoryViewSet(mixins.CreateModelMixin,mixins.DestroyModelMixin,mixins.Li
     def get_queryset(self):
         if self.request.user.role == 'super_admin':
             return Category.objects.all()
-        return Category.objects.filter(item_company=self.request.user.company)
-    
+        return Category.objects.filter(company=self.request.user.company) 
+
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
 
