@@ -1,5 +1,9 @@
 from rest_framework import serializers
 from .models import Account, Transaction
+from rest_framework import serializers
+from .models import Account, Transaction
+from sales_purchases.models import Sale, Purchase
+
 
 class AccountSerializer(serializers.ModelSerializer):
     balance = serializers.DecimalField(read_only=True,max_digits=15, decimal_places=2, default=0.00) 
@@ -8,20 +12,27 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = ['id', 'name', 'full_name','account_type', 'account_number', 'balance']
 
+
 class TransactionSerializer(serializers.ModelSerializer):
     bank_account = serializers.CharField(source='account.full_name',read_only=True)
+    linked_sale = serializers.PrimaryKeyRelatedField(queryset=Sale.objects.all(), required=False, allow_null=True)
+    linked_purchase = serializers.PrimaryKeyRelatedField(queryset=Purchase.objects.all(), required=False, allow_null=True)
+
     class Meta:
         model = Transaction
-        fields = ['id', 'account', 'type', 'amount', 'description', 'date', 'notes','balance_at_time','bank_account']
+        fields = ['id', 'account', 'type', 'amount', 'description', 'date', 'notes','balance_at_time','bank_account', 'linked_sale', 'linked_purchase']
         read_only_fields = ['date', 'balance_at_time']
 
     def validate(self, data):
-        # Auto-update account balance
+        if data.get('linked_sale') and data.get('linked_purchase'):
+            raise serializers.ValidationError("A transaction cannot be linked to both a sale and a purchase.")
+        if data['type'] == 'inflow' and data.get('linked_purchase'):
+            raise serializers.ValidationError("Inflow transactions cannot be linked to purchases.")
+        if data['type'] == 'outflow' and data.get('linked_sale'):
+            raise serializers.ValidationError("Outflow transactions cannot be linked to sales.")
+
         account = data.get('account')
-        if account:
-            if data['type'] == 'inflow':
-                account.balance += data['amount']
-            else:
-                account.balance -= data['amount']
-            account.save()
+        if account and data['type'] == 'outflow' and account.balance < data['amount']:
+            raise serializers.ValidationError("Insufficient balance in selected account.")
+
         return data
