@@ -1,41 +1,44 @@
 from rest_framework import serializers
 from .models import Supplier
+from sales_purchases.models import Purchase
+from django.db.models import Sum
 
 class SupplierSerializer(serializers.ModelSerializer):
-    products_count = serializers.SerializerMethodField() 
-    balance = serializers.SerializerMethodField()   
-    transaction_history = serializers.SerializerMethodField()      
+    products_count = serializers.SerializerMethodField()  
+    transaction_history = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
+    
 
     class Meta:
         model = Supplier
-        fields = ['id', 'name', 'phone', 'address', 'products_count', 'balance', 'notes', 'transaction_history']
+        fields = ['id', 'name', 'phone','address', 'products_count', 'notes','category', 'transaction_history']
+
+    def get_category(self, obj):
+        return Purchase.objects.filter(supplier=obj).values_list('item__category__name',flat=True).distinct()
+
 
     def get_products_count(self, obj):
-        return 0  
+        return Purchase.objects.filter(supplier=obj).values('item').distinct().count()
 
-    def get_balance(self, obj):
-        return 0.00
-    
+
     def get_transaction_history(self, obj):
-        return [
-            {
-                "date": "2025-10-20",
-                "product_code": "IND-2024-8472",
-                "units": 25,
-                "product_price": 338.00,
-                "payable": 8450.00,
-                "payment_received": 8450.00,
-                "bank": "Chase Bank",
-                "remain": 0.00
-            },
-            {
-                "date": "2025-10-15",
-                "product_code": "OFF-2024-5231",
-                "units": 15,
-                "product_price": 82.00,
-                "payable": 1230.00,
-                "payment_received": 800.00,
-                "bank": "Wells Fargo",
-                "remain": 430.00
-            },
-        ]
+        purchases = Purchase.objects.filter(supplier=obj).order_by('-date')[:10]  
+        history = []
+        for p in purchases:
+            payments = p.transactions.all().order_by('date')
+            paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
+            remain = p.total - paid
+            payment_sent = ', '.join([f"{t.amount} via {t.account.name} on {t.date.strftime('%Y-%m-%d')}" for t in payments]) if payments else "0"
+            bank = ', '.join(set([t.account.name for t in payments if t.account])) if payments else "N/A"
+            history.append({
+                "date": p.date.strftime("%Y-%m-%d"),
+                "product_code": p.item.code if p.item else "N/A",
+                "units": p.quantity,
+                "product_price": p.unit_price,
+                "payable": p.total,
+                "payment_sent": payment_sent,
+                "bank": bank,
+                "remain": remain
+            })
+        return history
+    
