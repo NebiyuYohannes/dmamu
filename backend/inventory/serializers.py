@@ -10,10 +10,11 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ItemListSerializer(serializers.ModelSerializer):
     worth = serializers.SerializerMethodField()
+    category = serializers.CharField(source='category.name',read_only=True)
 
     class Meta:
         model = Item
-        fields = ['id', 'name', 'warehouse_address', 'current_stock', 'unit_price', 'worth']
+        fields = ['id', 'name', 'warehouse_address',"category", 'current_stock', 'unit_price', 'worth']
         read_only_fields = ['worth']
 
     def get_worth(self, obj):

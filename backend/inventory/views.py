@@ -1,6 +1,7 @@
 from rest_framework import viewsets,mixins
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import OrderingFilter, SearchFilter
+from django_filters.rest_framework import DjangoFilterBackend
 from crm.permissions import HasActiveSubscription
 from .models import Item, Category, StockMovement
 from .serializers import ItemListSerializer,ItemDetailSerializer,CategorySerializer,StockMovementSerializer
@@ -19,9 +20,9 @@ class CategoryViewSet(mixins.CreateModelMixin,mixins.DestroyModelMixin,mixins.Li
 
 class ItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasActiveSubscription]
-    filter_backends = [OrderingFilter, SearchFilter]
+    filter_backends = [OrderingFilter, SearchFilter,DjangoFilterBackend]
     search_fields = ['name', 'code', 'warehouse_address']
-    ordering_fields = ['name', 'current_stock', 'unit_price']
+    ordering_fields = ['name', 'current_stock', 'unit_price', 'category__name']
     filterset_fields = ['category']
 
     def get_queryset(self):
