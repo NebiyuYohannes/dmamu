@@ -1,10 +1,12 @@
 from rest_framework import serializers
 from .models import Item, Category, StockMovement
 
+
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'description'] 
+        read_only_fields = ['company']
 
 class ItemListSerializer(serializers.ModelSerializer):
     worth = serializers.SerializerMethodField()
@@ -47,4 +49,17 @@ class StockMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockMovement
         fields = '__all__'
-        read_only_fields = ['date']
+
+    def validate(self, data):
+        movement_type = data.get('movement_type')
+        purchase = data.get('purchase')
+        sale = data.get('sale')
+
+        if movement_type == 'purchase' and not purchase:
+            raise serializers.ValidationError("Purchase movement requires purchase field.")
+        if movement_type == 'sale' and not sale:
+            raise serializers.ValidationError("Sale movement requires sale field.")
+        if movement_type == 'adjustment' and (purchase or sale):
+            raise serializers.ValidationError("Adjustment should not link to purchase or sale.")
+
+        return data
