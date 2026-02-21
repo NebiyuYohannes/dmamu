@@ -169,6 +169,10 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
        
     ),
+    # 'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    # 'DEFAULT_RENDERER_CLASSES': [
+    #     'rest_framework.renderers.JSONRenderer',
+    # ],
 }
 SIMPLE_JWT = {
    'AUTH_HEADER_TYPES': ('Bearer',),
