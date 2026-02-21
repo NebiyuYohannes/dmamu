@@ -1,9 +1,10 @@
 from django.db import models
 from django.db.models import Sum
+from rest_framework.serializers import ValidationError
 from core.models import Company
 from crm.models import Customer
 from suppliers.models import Supplier
-from inventory.models import Item  
+from inventory.models import Item,Warehouse
 from finance.models import Account, Transaction
 
 class PaymentStatus(models.TextChoices):
@@ -21,6 +22,7 @@ class Sale(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
     item = models.ForeignKey(Item, on_delete=models.SET_NULL, null=True)
     quantity = models.PositiveIntegerField()
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total = models.DecimalField(max_digits=12, decimal_places=2)  # quantity * unit_price
     date = models.DateField(auto_now_add=True)
@@ -48,6 +50,7 @@ class Purchase(models.Model):
     item = models.ForeignKey(Item, on_delete=models.SET_NULL, null=True)
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True)
     total = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField(auto_now_add=True)
     notes = models.TextField(blank=True)
