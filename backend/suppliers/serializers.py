@@ -1,46 +1,56 @@
 from rest_framework import serializers
 from .models import Supplier
 from sales_purchases.models import Purchase
-from django.db.models import Sum
 
-class SupplierSerializer(serializers.ModelSerializer):
-    products_count = serializers.SerializerMethodField()  
-    transaction_history = serializers.SerializerMethodField()
-    category = serializers.SerializerMethodField()
-    
+# Supplier overview
+class SupplierListSerializer(serializers.ModelSerializer):
+    products = serializers.IntegerField(read_only=True)
+    balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 
     class Meta:
         model = Supplier
-        fields = ['id', 'name', 'phone','address', 'products_count', 'notes','category', 'transaction_history']
+        fields = (
+            'id',
+            'name',
+            'phone',
+            'address',
+            'contact_person',
+            'products',
+            'balance',
+        )
 
-    def get_category(self, obj):
-        return Purchase.objects.filter(supplier=obj).values_list('item__category__name',flat=True).distinct()
 
+class SupplierHistorySerializer(serializers.ModelSerializer):
+    product_code = serializers.CharField(source='item.code', read_only=True)
+    units = serializers.SerializerMethodField()
+    payable = serializers.DecimalField(source='total', max_digits=12, decimal_places=2, read_only=True)
+    payment_sent = serializers.SerializerMethodField()
+    bank = serializers.SerializerMethodField()
+    remain = serializers.SerializerMethodField()
 
-    def get_products_count(self, obj):
-        return Purchase.objects.filter(supplier=obj).values('item').distinct().count()
+    class Meta:
+        model = Purchase
+        fields = (
+            'date',
+            'product_code',
+            'units',
+            'unit_price',
+            'payable',
+            'payment_sent',
+            'bank',
+            'remain',
+        )
 
+    def get_units(self, obj):
+        return f"{obj.quantity} {getattr(obj.item, 'unit_measure', '')}" 
 
-    def get_transaction_history(self, obj):
-        purchases = Purchase.objects.filter(supplier=obj).order_by('-date')[:10]  
-        history = []
-        for p in purchases:
-            payments = p.transactions.all().order_by('date')
-            paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
-            remain = p.total - paid
-            payment_sent = ', '.join([f"{t.amount} via {t.account.name} on {t.date.strftime('%Y-%m-%d')}" for t in payments]) if payments else "0"
-            bank = ', '.join(set([t.account.name for t in payments if t.account])) if payments else "N/A"
-            history.append({
-                "purchase_id": p.id,
-                "transaction_ids": list(payments.values_list('id', flat=True)),
-                "date": p.date.strftime("%Y-%m-%d"),
-                "product_code": p.item.code if p.item else "N/A",
-                "units": p.quantity,
-                "product_price": p.unit_price,
-                "payable": p.total,
-                "payment_sent": payment_sent,
-                "bank": bank,
-                "remain": remain
-            })
-        return history
+    def get_payment_sent(self, obj):
+        return sum([t.amount for t in obj.transactions.all()])
+
+    def get_bank(self, obj):
+        last_txn = obj.transactions.last()
+        return last_txn.account.full_name if last_txn and hasattr(last_txn, 'account') else None
+
+    def get_remain(self, obj):
+        return obj.total - self.get_payment_sent(obj)
     
