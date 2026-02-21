@@ -1,25 +1,48 @@
-from rest_framework import viewsets
-from rest_framework.filters import OrderingFilter,SearchFilter
+from django.db.models import Sum, Value, DecimalField,IntegerField
+from django.db.models.functions import Coalesce
+from rest_framework import viewsets,mixins
+from rest_framework.filters import SearchFilter,OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
-from crm.permissions import HasActiveSubscription,IsBusinessAdmin
+from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
 from .models import Supplier
-from .serializers import SupplierSerializer
+from .serializers import SupplierListSerializer, SupplierHistorySerializer
+from sales_purchases.models import Purchase
+from crm.permissions import IsBusinessAdmin,HasActiveSubscription
 
-class SupplierViewSet(viewsets.ModelViewSet):
-    serializer_class = SupplierSerializer
-    permission_classes = [IsAuthenticated,HasActiveSubscription,IsBusinessAdmin]
-    filter_backends = [OrderingFilter,SearchFilter]
-    search_fields = ['name','created_at']
-    ordering_fields = ['created_at'] 
+
+class SupplierViewSet(viewsets.GenericViewSet,
+                      mixins.ListModelMixin,
+                      mixins.CreateModelMixin,
+                      mixins.UpdateModelMixin, 
+                      mixins.DestroyModelMixin):
+    permission_classes = [IsAuthenticated,IsBusinessAdmin,HasActiveSubscription]
+    # filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
+    # search_fields = ['name', 'address']
+    # ordering_fields = ['name', 'created_at']
+    # filterset_fields = ['name']
 
     def get_queryset(self):
-        user = self.request.user
-        if user.role == 'super_admin':
-            return Supplier.objects.select_related('company').all()
-        
-        return Supplier.objects.select_related('company')\
-            .filter(company=user.company)
+        return Supplier.objects.annotate(
+            products=Coalesce(Sum('purchase__quantity'), Value(0, output_field=IntegerField())),
+            balance=Coalesce(Sum('purchase__total'), Value(0, output_field=DecimalField()))
+        )
 
+    def get_serializer_class(self):
+        return SupplierListSerializer
 
+    # Custom retrieve to return just purchase history list
+    def retrieve(self, request, pk=None):
+        supplier = self.get_queryset().filter(pk=pk).first()
+        if not supplier:
+            return Response({"detail": "Not found"}, status=404)
+
+        purchases = Purchase.objects.filter(supplier=supplier).order_by('-date')
+        serializer = SupplierHistorySerializer(purchases, many=True)
+        return Response(serializer.data)
+    
     def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company, created_by=self.request.user)
+        if not hasattr(self.request.user, 'company') or not self.request.user.company:
+            raise ValidationError("User must have an associated company.")
+        serializer.save(company=self.request.user.company)
