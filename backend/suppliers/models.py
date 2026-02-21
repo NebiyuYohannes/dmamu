@@ -4,6 +4,7 @@ from core.models import Company
 class Supplier(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='suppliers')
     name = models.CharField(max_length=255)
+    contact_person = models.CharField(max_length=255, blank=True, null=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
