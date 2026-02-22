@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import Sale, Purchase,PaymentStatus
 from inventory.models import Inventory
-from django.db.models import Sum
+from inventory.models import Item
+from django.db.models import Sum,Q
 
 class SaleSerializer(serializers.ModelSerializer):
     balance = serializers.SerializerMethodField() 
@@ -75,10 +76,11 @@ class PurchaseSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.name', read_only=True)
     balance = serializers.SerializerMethodField()
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    unit_measure = serializers.ChoiceField(source='item.unit_measure',choices=Item._meta.get_field('unit_measure').choices)
 
     class Meta:
         model = Purchase
-        fields = ['id', 'supplier', 'supplier_name', 'item', 'item_name', 'quantity','warehouse','warehouse_name',
+        fields = ['id', 'supplier', 'supplier_name', 'item','unit_measure', 'item_name', 'quantity','warehouse','warehouse_name',
                   'unit_price', 'total', 'date', 'notes', 'status', 'payment_method', 'account', 'balance']
         read_only_fields = ['total', 'date', 'balance'] 
 
@@ -120,5 +122,14 @@ class PurchaseSerializer(serializers.ModelSerializer):
         return data
 
     def get_balance(self, obj):
-        paid = obj.transactions.aggregate(Sum('amount'))['amount__sum'] or 0
-        return obj.total - paid
+
+        agg = obj.transactions.aggregate(
+            total_out=Sum('amount', filter=Q(type='outflow')),
+            total_in=Sum('amount', filter=Q(type='inflow'))
+        )
+
+        total_out = agg['total_out'] or 0
+        total_in = agg['total_in'] or 0
+
+        net_paid = total_out - total_in
+        return obj.total - net_paid
