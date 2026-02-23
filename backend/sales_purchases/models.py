@@ -20,7 +20,7 @@ class PaymentMethod(models.TextChoices):
 
 class Sale(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True,related_name="sales")
     item = models.ForeignKey(Item, on_delete=models.SET_NULL, null=True)
     quantity = models.PositiveIntegerField()
     warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True)
