@@ -3,40 +3,73 @@ from sales_purchases.models import Sale
 from .models import Customer,Interaction
 from django.db.models import Sum
 
+
+class CustomerTransactionHistorySerializer(serializers.ModelSerializer):
+    units = serializers.IntegerField(source="quantity", read_only=True)
+    product_name = serializers.CharField(source="item.name", read_only=True)
+    product_code = serializers.SerializerMethodField()
+    product_price = serializers.SerializerMethodField()
+    payable = serializers.SerializerMethodField()
+    payment_received = serializers.SerializerMethodField()
+    bank = serializers.SerializerMethodField()
+    remain = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Sale
+        fields = [
+            'id',
+            'date',
+            'units',
+            'product_name',
+            'product_code',
+            'product_price',
+            'payable',
+            'payment_received',
+            'bank',
+            'remain'
+        ]
+
+    def get_product_code(self,obj):
+        return obj.item.code if obj.item else "N/A"
+    
+    def get_product_price(self,obj):
+        return  float(obj.unit_price)
+    
+    def get_payable(self,obj):
+        return  float(obj.total)
+    
+    def get_payment_received(self,obj):
+        payments = obj.transactions.all().order_by('date')
+        return ', '.join([f"{t.amount} via {t.account.name} on {t.date.strftime('%Y-%m-%d')}" for t in payments]) if payments else "0"
+
+    def get_bank(self,obj):
+        payments = obj.transactions.all().order_by('date')
+        return ', '.join(set([t.account.name for t in payments if t.account])) if payments else "N/A"
+    
+    def get_remain(self,obj):
+        payments = obj.transactions.all().order_by('date')
+        paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
+        return obj.total - paid
+
+
 class CustomerSerializer(serializers.ModelSerializer):
-    products_count = serializers.SerializerMethodField()  
-    transaction_history = serializers.SerializerMethodField()  
-        
+    products_count = serializers.SerializerMethodField()
+    sales = CustomerTransactionHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = Customer
-        fields = ['id', 'name', 'phone', 'address', 'products_count', 'notes', 'transaction_history']
+        fields = [
+            'id',
+            'name',
+            'phone',
+            'address',
+            'products_count',
+            'notes',
+            'sales'
+        ]
 
     def get_products_count(self, obj):
-        return Sale.objects.filter(customer=obj).values('item').distinct().count()
-
-    
-    def get_transaction_history(self, obj):
-        sales = Sale.objects.filter(customer=obj).order_by('-date')
-
-        history = []
-        for sale in sales:
-            payments = sale.transactions.all().order_by('date')
-            paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
-            payment_received = ', '.join([f"{t.amount} via {t.account.name} on {t.date.strftime('%Y-%m-%d')}" for t in payments]) if payments else "0"
-            bank = ', '.join(set([t.account.name for t in payments if t.account])) if payments else "N/A"
-            history.append({
-                "date": sale.date.strftime("%b %d, %Y"),
-                "product_code": sale.item.code if sale.item else "N/A",
-                "units": sale.quantity,
-                "product_price": float(sale.unit_price),
-                "payable": float(sale.total),
-                "payment_received": payment_received,
-                "bank": bank,
-                "remain": sale.total - paid
-            })
-        return history
-    
+        return obj.sales.values('item').distinct().count()
 
     
 class InteractionSerializer(serializers.ModelSerializer):
