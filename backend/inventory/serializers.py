@@ -91,14 +91,14 @@ class StockMovementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StockMovement
-        fields = '__all__'
+        fields = ['id','inventory','movement_type','quantity','date','notes','purchase','sale']
 
     def validate(self, data):
         movement_type = data.get('movement_type')
         purchase = data.get('purchase')
         sale = data.get('sale')
         inventory = data.get('inventory')
-        quantity = data.get('quantity')  # Already validated as int by model field
+        quantity = data.get('quantity')
 
         if movement_type == 'purchase' and not purchase:
             raise serializers.ValidationError("Purchase movement requires purchase field.")
