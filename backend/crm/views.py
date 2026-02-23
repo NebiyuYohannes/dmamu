@@ -1,15 +1,18 @@
-from django.db.models import Prefetch,Q
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import OrderingFilter,SearchFilter
 from sales_purchases.models import Sale
 from .models import Customer, Interaction
-from .serializers import CustomerSerializer, InteractionSerializer
+from .serializers import CustomerSerializer, InteractionSerializer,CustomerTransactionHistorySerializer
 from .permissions import HasActiveSubscription,IsOwnerOrEmployee,IsBusinessAdmin
-
-from django.db.models import Prefetch
+from .utils import export_customer_history
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
+
+
 
 class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
@@ -20,48 +23,66 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        search = self.request.query_params.get('search_sales')
-        ordering = self.request.query_params.get("sales_ordering")
+
+        if user.role == "super_admin":
+            return Customer.objects.select_related("company")
+
+        return Customer.objects.select_related("company").filter(
+            company=user.company
+        )
+    def retrieve(self, request, pk=None):
+        user = request.user
+
+        customer = get_object_or_404(Customer, pk=pk)
+
+        if user.role != "super_admin" and customer.company != user.company:
+            return Response({"detail": "Not allowed"}, status=403)
+
+        search = request.query_params.get("search_sales")
+        ordering = request.query_params.get("sales_ordering")
+        export_type = request.query_params.get("export")
 
         allowed_ordering = ["date", "-date"]
 
-        # Start with Sale queryset
         sales_queryset = Sale.objects.select_related("item") \
-            .prefetch_related("transactions")
+            .prefetch_related("transactions") \
+            .filter(customer=customer)
 
-        # Filter by company (multi-tenant safety)
         if user.role != "super_admin":
             sales_queryset = sales_queryset.filter(company=user.company)
 
-        # Apply search
         if search:
             sales_queryset = sales_queryset.filter(
                 Q(item__name__icontains=search) |
                 Q(item__code__icontains=search)
             )
 
-        # Apply ordering safely
         if ordering in allowed_ordering:
             sales_queryset = sales_queryset.order_by(ordering)
         else:
             sales_queryset = sales_queryset.order_by("-date")
 
-        # Wrap in Prefetch
-        sales_prefetch = Prefetch(
-            "sales",
-            queryset=sales_queryset
+        serializer = CustomerTransactionHistorySerializer(
+            sales_queryset,
+            many=True
         )
+        if export_type:
+            response = export_customer_history(
+                export_type,
+                serializer.data,
+                customer.id
+            )
 
-        # Base queryset
-        base_queryset = Customer.objects.select_related("company").prefetch_related(
-            sales_prefetch
-        )
+            if response:
+                return response
 
-        if user.role == "super_admin":
-            return base_queryset
+            return Response(
+                {"detail": "Invalid export type. Use 'csv' or 'pdf'."},
+                status=400
+            )
 
-        return base_queryset.filter(company=user.company)
-
+        return Response(serializer.data)
+    
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
 
