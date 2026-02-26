@@ -76,12 +76,12 @@ class Purchase(models.Model):
         balance = self.total - net_paid
 
         if balance == 0:
-            self.status = PaymentStatus.PAID
+            status = PaymentStatus.PAID
         elif balance > 0:
-            self.status = PaymentStatus.PARTIAL
+            status = PaymentStatus.PARTIAL
         elif balance < 0:
-            self.status = PaymentStatus.OVERPAID
+            status = PaymentStatus.OVERPAID
         else:
-            self.status = PaymentStatus.UNPAID
+            status = PaymentStatus.UNPAID
 
-        self.save(update_fields=['status'])
+        Purchase.objects.filter(pk=self.pk).update(status=status)
