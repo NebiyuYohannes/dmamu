@@ -13,7 +13,7 @@ def generate_daily_notifications():
     for inv in low_stocks:
         Notification.objects.create(
             company=inv.company,
-            user=inv.company.owner,  # Send to admin
+            user=inv.company.owner, 
             type='low_stock',
             message=f"{inv.item.name} stock low in {inv.warehouse.name}: {inv.current_stock} left (threshold {inv.low_stock_threshold})"
         )
