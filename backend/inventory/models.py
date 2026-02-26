@@ -37,12 +37,7 @@ class Item(models.Model):
     description = models.TextField(blank=True)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
-    unit_measure = models.CharField(max_length=20,choices=[
-        ('piece', 'Piece'),
-        ('kg', 'Kilogram'),
-        ('liter', 'Liter'),
-        ('box', 'Box'),
-    ],default='piece')
+    unit_measure = models.CharField(max_length=20,default='piece')
 
     class Meta:
         verbose_name_plural = 'items'
@@ -71,6 +66,10 @@ class Inventory(models.Model):
 
     def __str__(self):
         return f"{self.item.name} - {self.warehouse.name} ({self.current_stock})"
+    
+    @property
+    def is_low_stock(self):
+        return self.current_stock <= self.low_stock_threshold
 
     def clean(self):
         if self.company_id is None:
@@ -145,6 +144,6 @@ class StockMovement(models.Model):
             if self.pk:
                 raise ValidationError("Editing stock movements is not allowed.")
             with transaction.atomic():
-                super().save(*args, **kwargs)
                 self.inventory.current_stock += self.quantity
                 self.inventory.save(update_fields=['current_stock'])
+                super().save(*args, **kwargs)
