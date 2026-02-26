@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from inventory.models import StockMovement, Inventory
 from django.db import transaction
 from sales_purchases.models import Purchase,Sale
-
+from notifications.models import Notification
 logger = logging.getLogger(__name__)
 
 
@@ -68,3 +68,19 @@ def create_stock_movement_for_purchase(sender, instance, created, **kwargs):
             purchase=instance,
             notes=instance.notes or "Auto-generated from purchase"
         )
+
+
+@receiver(post_save, sender=StockMovement)
+def trigger_low_stock_notification(sender, instance, created, **kwargs):
+    if created:  # Only on new movements
+        inventory = instance.inventory
+        # Check if this movement reduces stock (out or negative adjustment)
+        if instance.movement_type in ['sale', 'transfer_out'] or (instance.movement_type == 'adjustment' and instance.quantity < 0):
+            # After update, check if now low
+            if inventory.is_low_stock:
+                Notification.objects.create(
+                    company=inventory.company,
+                    user=inventory.company.owner, 
+                    type='low_stock',
+                    message=f"{inventory.item.name} stock low in {inventory.warehouse.name}: {inventory.current_stock} left (threshold {inventory.low_stock_threshold})"
+                )
