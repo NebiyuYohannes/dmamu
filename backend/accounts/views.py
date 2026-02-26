@@ -1,5 +1,7 @@
 from django.contrib.auth.tokens import default_token_generator
 from djoser.utils import decode_uid,encode_uid
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
@@ -13,7 +15,8 @@ from .serializers import (OTPVerifySerializer,
                           PasswordResetConfirmSerializer,
                           ChangePasswordSerializer,
                           ProfileSerializer,
-                          EmployeeCreateSerializer)
+                          EmployeeCreateSerializer,
+                          LogoutSerializer)
 from .utils import send_activation_email
 from .permissions import IsBusinessAdmin,IsBusinessOrAdmin
 from rest_framework.viewsets import GenericViewSet
@@ -35,6 +38,8 @@ class AuthViewSet(GenericViewSet):
             return PasswordResetConfirmSerializer
         if self.action == "change_password":
             return ChangePasswordSerializer
+        if self.action == "logout":
+            return LogoutSerializer
         return super().get_serializer_class()
 
     # @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
@@ -124,7 +129,6 @@ class AuthViewSet(GenericViewSet):
             logger.error(f"Failed to send OTP for password reset: {e}")
             return Response({"error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
     @action(detail=False, methods=['post'], url_path='reset-password')
     def reset_password(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -138,6 +142,22 @@ class AuthViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"message": "Password changed successfully"},status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], url_path='logout', permission_classes=[IsAuthenticated])
+    def logout(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True) 
+
+        try:
+            token = RefreshToken(serializer.validated_data['refresh'])
+            token.blacklist() 
+
+            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+        except TokenError:
+            return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
@@ -164,7 +184,7 @@ class ProfileViewSet(viewsets.ModelViewSet):
 class EmployeeCreateViewSet(mixins.CreateModelMixin, GenericViewSet):
     queryset = User.objects.all()
     serializer_class = EmployeeCreateSerializer
-    permission_classes = [IsAuthenticated,IsBusinessOrAdmin]
+    permission_classes = [IsAuthenticated]
 
 
     

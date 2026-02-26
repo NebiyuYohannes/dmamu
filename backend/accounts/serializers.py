@@ -321,3 +321,11 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
         )
 
         return user
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if not data['refresh']:
+            raise serializers.ValidationError("Refresh token cannot be empty.")
+        return data
