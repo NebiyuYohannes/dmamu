@@ -13,7 +13,7 @@ services:
       db:
         condition: service_healthy
     restart: on-failure
-
+    
   db:
     image: postgres:16
     container_name: habsify_db
@@ -31,6 +31,35 @@ services:
       timeout: 5s
       retries: 5
     restart: on-failure
+  redis:
+    image: redis:6.2-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - redis_data:/data
+
+  celery_worker:
+    build: ./backend
+    command: ["uv", "run", "celery", "-A", "habsify", "worker", "-l", "info"]
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  celery_beat:
+    build: ./backend
+    command: ["uv", "run", "celery", "-A", "habsify", "beat", "-l", "info"]
+    volumes: 
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
 
 volumes:
   pgdata:
+  redis_data:
