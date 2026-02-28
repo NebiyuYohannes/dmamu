@@ -1,6 +1,6 @@
 from django.db.models import Sum, Value, DecimalField,IntegerField
 from django.db.models.functions import Coalesce
-from rest_framework import viewsets
+from rest_framework import viewsets,status
 from rest_framework.filters import SearchFilter,OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from .models import Supplier
 from .serializers import SupplierListSerializer, SupplierHistorySerializer
+from .pagination import SupplierPagination
 from sales_purchases.models import Purchase
 from crm.permissions import IsBusinessAdmin,HasActiveSubscription
 from .utils import export_supplier_history
@@ -18,6 +19,8 @@ class SupplierViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'address']
     ordering_fields = ['name', 'created_at','balance']
     filterset_fields = ['name']
+    pagination_class = SupplierPagination
+
 
     def get_queryset(self):
         return Supplier.objects.annotate(
@@ -33,7 +36,10 @@ class SupplierViewSet(viewsets.ModelViewSet):
         if not supplier:
             return Response({"detail": "Not found"}, status=404)
 
-        purchases = Purchase.objects.filter(supplier=supplier).order_by('-date')
+        purchases = Purchase.objects.filter(
+            supplier=supplier
+        ).order_by('-date')
+
         serializer = SupplierHistorySerializer(purchases, many=True)
 
         export_type = request.query_params.get("export")
@@ -44,6 +50,12 @@ class SupplierViewSet(viewsets.ModelViewSet):
                 return response
             return Response({"detail": "Unsupported export type"}, status=400)
 
+        page = self.paginate_queryset(purchases)
+        if page is not None:
+            serializer = SupplierHistorySerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SupplierHistorySerializer(purchases, many=True)
         return Response(serializer.data)
     def perform_create(self, serializer):
         if not hasattr(self.request.user, 'company') or not self.request.user.company:
