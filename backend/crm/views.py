@@ -1,5 +1,6 @@
-from django.db.models import Q
+from django.db.models import Sum, Value, DecimalField, Q, Max, Count
 from rest_framework import viewsets
+from django.db.models.functions import Coalesce
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import OrderingFilter,SearchFilter
 from sales_purchases.models import Sale
@@ -20,32 +21,32 @@ class CustomerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasActiveSubscription, IsOwnerOrEmployee]
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['name', 'created_at']
-    ordering_fields = ['created_at']
+    ordering_fields = ['name', 'created_at', 'products_count', 'address', 'latest_sale', 'balance']
     pagination_class = CustomerPagination
 
     def get_queryset(self):
         user = self.request.user
 
-        if user.role == "super_admin":
-            return Customer.objects.select_related("company")
-
-        return Customer.objects.select_related("company").filter(
-            company=user.company
+        qs = Customer.objects.select_related("company")
+        if user.role != "super_admin":
+            qs = qs.filter(company=user.company)
+        return qs.annotate(
+            products_count=Count('sales__item', distinct=True),
+            balance=Coalesce(Sum('sales__total'), Value(0, output_field=DecimalField())),
+            latest_sale=Max('sales__date')
         )
 
     def retrieve(self, request, pk=None):
         user = request.user
 
-        customer = get_object_or_404(Customer, pk=pk)
+        customer = get_object_or_404(self.get_queryset(), pk=pk)
 
         if user.role != "super_admin" and customer.company != user.company:
             return Response({"detail": "Not allowed"}, status=403)
 
         search = request.query_params.get("search")
-        ordering = request.query_params.get("ordering")
+        ordering = request.query_params.get("ordering")  
         export_type = request.query_params.get("export")
-
-        allowed_ordering = ["date", "-date"]
 
         sales_queryset = Sale.objects.select_related("item") \
             .prefetch_related("transactions") \
@@ -60,8 +61,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 Q(item__code__icontains=search)
             )
 
-        if ordering in allowed_ordering:
-            sales_queryset = sales_queryset.order_by(ordering)
+        if ordering:
+            # Split by comma for multi-field support
+            ordering_fields = [field.strip() for field in ordering.split(',')]
+            # Validate against allowed fields to prevent arbitrary sorting
+            allowed_fields = ['date', 'quantity', 'unit_price', 'total', 'status', 'item__code']
+            valid_ordering = [f for f in ordering_fields if f.lstrip('-') in allowed_fields]
+            if valid_ordering:
+                sales_queryset = sales_queryset.order_by(*valid_ordering)
+            else:
+                sales_queryset = sales_queryset.order_by("-date")
         else:
             sales_queryset = sales_queryset.order_by("-date")
 
@@ -105,9 +114,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
-        
+        serializer.save(company=self.request.user.company)   
 class InteractionViewSet(viewsets.ModelViewSet):
     queryset = Interaction.objects.all()
     serializer_class = InteractionSerializer

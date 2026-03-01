@@ -56,9 +56,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
                 Q(item__code__icontains=search)
             )
 
-        # Apply ordering using Django's order_by (supports multiples and prefixes)
         if ordering:
-            # Split by comma for multi-field support
             ordering_fields = [field.strip() for field in ordering.split(',')]
             # Validate against allowed fields to prevent arbitrary sorting
             allowed_fields = ['date', 'quantity', 'unit_price', 'total', 'status', 'item__code']
