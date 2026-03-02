@@ -3,15 +3,29 @@ from .models import Item, Category, StockMovement,Warehouse,Inventory
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    items = serializers.SerializerMethodField()
     class Meta:
         model = Category
-        fields = ['id', 'name', 'description'] 
+        fields = ['id', 'name', 'description','items'] 
         read_only_fields = ['company']
+
+    def get_items(self, obj):
+        return obj.item_count
         
     def validate(self, attrs):
         name = attrs.get('name', '').strip()
+        request = self.context['request']
+        company = self.instance.company if self.instance else request.user.company
 
-        if Category.objects.filter(name__iexact=name).exists():
+        queryset = Category.objects.filter(
+            name__iexact=name,
+            company=company
+        )
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
             raise serializers.ValidationError({
                 'name': 'This category name is already taken.'
             })

@@ -137,15 +137,23 @@ class ItemViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
 
-
-class CategoryViewSet(mixins.CreateModelMixin,mixins.DestroyModelMixin,mixins.ListModelMixin,viewsets.GenericViewSet):
+class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
+    pagination_class = StandardPagination 
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['name']
+    search_fields = ['name']
+    ordering_fields = ['name', 'created_at', 'item_count','updated_at']
 
     def get_queryset(self):
         if self.request.user.role == 'super_admin':
-            return Category.objects.all()
-        return Category.objects.filter(company=self.request.user.company) 
+            qs = Category.objects.all()
+        else:
+            qs = Category.objects.filter(company=self.request.user.company)
+        return qs.annotate(
+            item_count=Count('items')  
+        )
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)

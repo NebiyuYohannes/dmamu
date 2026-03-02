@@ -7,6 +7,8 @@ class Category(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ['company', 'name']
@@ -31,7 +33,7 @@ class Warehouse(models.Model):
 
 class Item(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='items')
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True)
