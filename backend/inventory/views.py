@@ -15,7 +15,11 @@ from .serializers import (
     WarehouseInventorySerializer,
     WarehouseCreateSerializer,
     ItemSerializer,CategorySerializer,
-    StockMovementSerializer
+    StockMovement,
+    StockMovementCreateUpdateSerializer,
+    StockMovementDetailSerializer,
+    StockMovementListSerializer,
+    InventoryDropdownSerializer
 )
 from .models import Warehouse, Item
 from .pagination import StandardPagination  
@@ -160,12 +164,82 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class StockMovementViewSet(viewsets.ModelViewSet):
-    serializer_class = StockMovementSerializer
+
     permission_classes = [IsAuthenticated, HasActiveSubscription]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    http_method_names = ["get", "post"]
+    filterset_fields = ['movement_type', 'inventory__id', 'date']
+    search_fields = ['notes', 'inventory__item__name', 'movement_type']
+    ordering_fields = [
+        'date',
+        'movement_type',
+        'quantity',
+        'inventory__warehouse__name',
+        'notes'
+    ]
+
+    pagination_class = StandardPagination
 
     def get_queryset(self):
-        qs = StockMovement.objects.select_related('inventory__company')
-        user_company = getattr(self.request.user, 'company', None)
-        if self.request.user.role != 'super_admin' and user_company is not None:
-            qs = qs.filter(inventory__company=user_company)
-        return qs.order_by('-date')
+        qs = StockMovement.objects.select_related(
+            "inventory__company",
+            "inventory__warehouse",
+            "inventory__item",
+            "purchase",
+            "sale",
+        )
+
+        user = self.request.user
+        company = getattr(user, "company", None)
+
+        # Filter by company if not super_admin
+        if user.role != "super_admin" and company:
+            qs = qs.filter(inventory__company=company)
+
+        # Optional extra search (your manual override — still safe)
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(notes__icontains=search) |
+                Q(inventory__item__name__icontains=search) |
+                Q(movement_type__icontains=search)
+            )
+
+        return qs.order_by("-date")
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return StockMovementListSerializer
+
+        if self.action == "retrieve":
+            return StockMovementDetailSerializer
+
+        return StockMovementCreateUpdateSerializer
+
+
+class InventoryDropdownViewSet(viewsets.ReadOnlyModelViewSet):
+
+    serializer_class = InventoryDropdownSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Inventory.objects.select_related(
+            "item",
+            "warehouse",
+            "company",
+        )
+
+        user = self.request.user
+        company = getattr(user, "company", None)
+
+        if user.role != "super_admin" and company:
+            qs = qs.filter(company=company)
+
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(item__name__icontains=search) |
+                Q(warehouse__name__icontains=search)
+            )
+
+        return qs.order_by("item__name")
