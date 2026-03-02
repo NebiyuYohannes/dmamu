@@ -111,7 +111,6 @@ class StockMovementCreateUpdateSerializer(serializers.ModelSerializer):
         inventory = data.get("inventory")
         quantity = data.get("quantity")
 
-        # --- Movement rules ---
         if movement_type == "purchase" and not purchase:
             raise serializers.ValidationError(
                 "Purchase movement requires a purchase reference."
@@ -127,14 +126,12 @@ class StockMovementCreateUpdateSerializer(serializers.ModelSerializer):
                 "Adjustment must not be linked to purchase or sale."
             )
 
-        # --- Company validation ---
         user = self.context["request"].user
         if inventory and inventory.company != user.company:
             raise serializers.ValidationError(
                 "Inventory does not belong to your company."
             )
 
-        # --- Stock validation ---
         if inventory:
             new_stock = inventory.current_stock + quantity
             if new_stock < 0:
