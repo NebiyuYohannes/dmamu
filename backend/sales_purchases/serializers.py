@@ -133,3 +133,37 @@ class PurchaseSerializer(serializers.ModelSerializer):
 
         net_paid = total_out - total_in
         return obj.total - net_paid
+    
+class PurchaseDropdownSerializer(serializers.ModelSerializer):
+
+    label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Purchase
+        fields = ["id", "label"]
+
+    def get_label(self, obj):
+        return (
+            f"PUR-{obj.id} | "
+            f"Supplier: {obj.supplier} | "
+            f"Qty: {obj.quantity} | "
+            f"Total: {obj.total}"
+        )
+    
+class SaleDropdownSerializer(serializers.ModelSerializer):
+
+    label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Sale
+        fields = ["id", "label"]
+
+    def get_label(self, obj):
+        supplier = obj.customer.name if obj.customer else "No Customer"
+
+        return (
+            f"PUR-{obj.id} | "
+            f"Supplier: {obj.customer} | "
+            f"Qty: {obj.quantity} | "
+            f"Total: {obj.total}"
+        )
