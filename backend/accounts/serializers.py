@@ -22,8 +22,11 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ['name']
 
     def validate_name(self, value):
-        if not value.strip():
+        value = value.strip()
+        if not value:
             raise serializers.ValidationError("Company name cannot be empty.")
+        if Company.objects.filter(name=value).exists():
+            raise serializers.ValidationError("A company with this name already exists.")
         return value
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
@@ -35,23 +38,44 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
         if not value:
             return value
         try:
-            return normalize_phone(value)
+            normalized = normalize_phone(value)
         except serializers.ValidationError as e:
             raise serializers.ValidationError(str(e))
+        
+        # if PhoneNumber.objects.filter(number=normalized).exists():
+        #     raise serializers.ValidationError("A phone number with this value already exists.")
+        
+        return normalized
 
 class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
     email = serializers.EmailField(validators=[validate_unique_email])
     username = serializers.CharField(validators=[validate_unique_username])
-    phone = PhoneNumberSerializer(write_only=True, required=False)
-    company = CompanySerializer(required=False, allow_null=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    company = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
         fields = ['id', 'email', 'first_name', 'last_name', 'username', 'password', 'phone', 'company']
 
     def validate(self, attrs):
-        self.company_data = attrs.pop('company', None)
-        self.phone_data = attrs.pop('phone', None)
+        phone_str = attrs.pop('phone', None)
+        if phone_str:
+            phone_serializer = PhoneNumberSerializer(data={'number': phone_str})
+            if not phone_serializer.is_valid():
+                raise serializers.ValidationError({'phone': phone_serializer.errors})
+            self.phone_data = phone_serializer.validated_data
+        else:
+            self.phone_data = None
+
+        company_str = attrs.pop('company', None)
+        if company_str:
+            company_serializer = CompanySerializer(data={'name': company_str})
+            if not company_serializer.is_valid():
+                raise serializers.ValidationError({'company': company_serializer.errors})
+            self.company_data = company_serializer.validated_data
+        else:
+            self.company_data = None
+
         # if self.phone_data and not self.phone_data.get('number'):
         #     raise serializers.ValidationError({"phone": "Phone number is required if phone data is provided."})
         return super().validate(attrs)
@@ -329,3 +353,60 @@ class LogoutSerializer(serializers.Serializer):
         if not data['refresh']:
             raise serializers.ValidationError("Refresh token cannot be empty.")
         return data
+    
+class OTPResetSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=False)
+    phone = serializers.CharField(required=False)
+    otp = serializers.CharField(required=True, max_length=6)
+    new_password = serializers.CharField(required=True, write_only=True)
+    re_new_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['re_new_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        email = attrs.get('email')
+        phone = attrs.get('phone')
+        if not email and not phone:
+            raise serializers.ValidationError("Provide either phone or email.")
+        if phone:
+            phone = normalize_phone(phone)
+            user = User.objects.filter(phone_numbers__number=phone, is_active=True).first()
+            otp_type = OTPCode.TYPE_SMS
+        else:
+            user = User.objects.filter(email=email, is_active=True).first()
+            otp_type = OTPCode.TYPE_EMAIL
+        if not user:
+            raise serializers.ValidationError("User not found.")
+        
+        # Get the latest unused OTP for this purpose and type
+        otp_obj = OTPCode.objects.filter(
+            user=user,
+            purpose=OTPCode.PURPOSE_RESET,
+            type=otp_type,
+            used=False
+        ).order_by('-created_at').first()
+        
+        if not otp_obj:
+            raise serializers.ValidationError("No valid OTP found for reset.")
+        
+        if otp_obj.is_expired:
+            raise serializers.ValidationError("OTP has expired.")
+        
+        if otp_obj.is_locked:
+            otp_obj.mark_used()
+            raise serializers.ValidationError("Too many failed attempts. Please request a new OTP.")
+        
+        # Verify the OTP using the model's method
+        verified = otp_obj.verify(attrs['otp'])
+        if verified:
+            attrs['user'] = user
+            return attrs
+        else:
+            # Since other cases are handled, this must be an incorrect code
+            remaining = otp_obj.remain_attempt()
+            raise serializers.ValidationError(f"Invalid OTP. {remaining} attempt{'s' if remaining != 1 else ''} remaining.")
+
+    def save(self):
+        user = self.validated_data['user']
+        user.set_password(self.validated_data['new_password'])
+        user.save()

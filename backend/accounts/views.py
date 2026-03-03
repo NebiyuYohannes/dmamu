@@ -16,7 +16,8 @@ from .serializers import (OTPVerifySerializer,
                           ChangePasswordSerializer,
                           ProfileSerializer,
                           EmployeeCreateSerializer,
-                          LogoutSerializer)
+                          LogoutSerializer,
+                          OTPResetSerializer)
 from .utils import send_activation_email
 from .permissions import IsBusinessAdmin,IsBusinessOrAdmin
 from rest_framework.viewsets import GenericViewSet
@@ -35,7 +36,7 @@ class AuthViewSet(GenericViewSet):
         if self.action == "forgot_password":
             return ForgotPasswordSerializer
         if self.action == "reset_password":
-            return PasswordResetConfirmSerializer
+            return OTPResetSerializer
         if self.action == "change_password":
             return ChangePasswordSerializer
         if self.action == "logout":
@@ -111,7 +112,7 @@ class AuthViewSet(GenericViewSet):
         return Response({"message": "Activation email resent"}, status=200)
 
     # @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
-    @action(detail=False, methods=["post"], url_path="forgot-password")
+    @action(detail=False, methods=["post"], url_path="forgot-password",authentication_classes=[],permission_classes=[AllowAny])
     def forgot_password(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
