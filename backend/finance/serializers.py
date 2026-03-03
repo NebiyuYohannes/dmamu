@@ -21,15 +21,15 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         if data.get('linked_sale') and data.get('linked_purchase'):
-            raise serializers.ValidationError("A transaction cannot be linked to both a sale and a purchase.")
+            raise serializers.ValidationError({"detail": "A transaction cannot be linked to both a sale and a purchase."})
         # if data['type'] == 'inflow' and data.get('linked_purchase'):
-        #     raise serializers.ValidationError("Inflow transactions cannot be linked to purchases.")
+        #     raise serializers.ValidationError({"detail": "Inflow transactions cannot be linked to purchases."})
         # if data['type'] == 'outflow' and data.get('linked_sale'):
-        #     raise serializers.ValidationError("Outflow transactions cannot be linked to sales.")
+        #     raise serializers.ValidationError({"detail": "Outflow transactions cannot be linked to sales."})
 
         account = data.get('account')
         if account and data['type'] == 'outflow' and account.balance < data['amount']:
-            raise serializers.ValidationError("Insufficient balance in selected account.")
+            raise serializers.ValidationError({"detail": "Insufficient balance in selected account."})
 
         # Auto-set type based on linked (for refunds too)
         # if data.get('linked_sale'):

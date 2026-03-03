@@ -39,7 +39,7 @@ class NotificationViewSet(mixins.ListModelMixin,mixins.RetrieveModelMixin,viewse
         notification = self.get_object()
         notification.is_read = True
         notification.save()
-        return Response({"status": "marked as read"})
+        return Response({"detail": "marked as read"})
 
     @action(detail=False, methods=["get"])
     def unread(self, request):

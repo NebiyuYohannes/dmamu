@@ -24,9 +24,9 @@ class CompanySerializer(serializers.ModelSerializer):
     def validate_name(self, value):
         value = value.strip()
         if not value:
-            raise serializers.ValidationError("Company name cannot be empty.")
+            raise serializers.ValidationError({"detail": "Company name cannot be empty."})
         if Company.objects.filter(name=value).exists():
-            raise serializers.ValidationError("A company with this name already exists.")
+            raise serializers.ValidationError({"detail": "A company with this name already exists."})
         return value
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
@@ -43,7 +43,7 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(str(e))
         
         # if PhoneNumber.objects.filter(number=normalized).exists():
-        #     raise serializers.ValidationError("A phone number with this value already exists.")
+        #     raise serializers.ValidationError({"detail": "A phone number with this value already exists."})
         
         return normalized
 
@@ -62,7 +62,7 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
         if phone_str:
             phone_serializer = PhoneNumberSerializer(data={'number': phone_str})
             if not phone_serializer.is_valid():
-                raise serializers.ValidationError({'phone': phone_serializer.errors})
+                raise serializers.ValidationError(phone_serializer.errors)
             self.phone_data = phone_serializer.validated_data
         else:
             self.phone_data = None
@@ -71,13 +71,13 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
         if company_str:
             company_serializer = CompanySerializer(data={'name': company_str})
             if not company_serializer.is_valid():
-                raise serializers.ValidationError({'company': company_serializer.errors})
+                raise serializers.ValidationError(company_serializer.errors)
             self.company_data = company_serializer.validated_data
         else:
             self.company_data = None
 
-        # if self.phone_data and not self.phone_data.get('number'):
-        #     raise serializers.ValidationError({"phone": "Phone number is required if phone data is provided."})
+        if self.phone_data and not self.phone_data.get('number'):
+            raise serializers.ValidationError({"detail": "Phone number is required if phone data is provided"})
         return super().validate(attrs)
 
     def create(self, validated_data):
@@ -94,12 +94,12 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
                     otp, _ = create_otp_for_user(user, OTPCode.TYPE_SMS, purpose=OTPCode.PURPOSE_SIGNUP)
                     send_otp_to_phone(phone=phone_data['number'], otp_code=otp)
                 except ValueError as e:
-                    raise serializers.ValidationError("Failed to send OTP.")
+                    raise serializers.ValidationError({"detail": "Failed to send OTP."})
             else:
                 try:
                     send_activation_email(user, request=self.context.get("request"))
                 except Exception as e:
-                    raise serializers.ValidationError("Failed to send activation email.")
+                    raise serializers.ValidationError({"detail": "Failed to send activation email."})
             if company_data and company_data.get('name'):
                 company = Company.objects.create(
                     name=company_data['name'],
@@ -115,7 +115,7 @@ class OTPVerifySerializer(serializers.Serializer):
     def validate(self, attrs):
         code = attrs["code"]
         if len(code) != 6 or not code.isdigit():
-            raise serializers.ValidationError("OTP must be 6 digits.")
+            raise serializers.ValidationError({"detail": "OTP must be 6 digits."})
         try:
             otp = OTPCode.objects.filter(
                 code=code,
@@ -123,11 +123,11 @@ class OTPVerifySerializer(serializers.Serializer):
                 expires_at__gt=timezone.now()
             ).latest("created_at")
         except OTPCode.DoesNotExist:
-            raise serializers.ValidationError("No valid OTP found. It may have expired or been used.")
+            raise serializers.ValidationError({"detail": "No valid OTP found. It may have expired or been used."})
 
         if otp.is_locked:
             otp.mark_used()
-            raise serializers.ValidationError("Too many failed attempts. OTP invalidated.")
+            raise serializers.ValidationError({"detail": "Too many failed attempts. OTP invalidated."})
 
         attrs["otp"] = otp
         attrs["user"] = otp.user
@@ -140,7 +140,7 @@ class ResendActivationSerializer(serializers.Serializer):
         try:
             user = User.objects.get(email=value, is_active=False)
         except User.DoesNotExist:
-            raise serializers.ValidationError("User not found or already active.")
+            raise serializers.ValidationError({"detail": "User not found or already active."})
         return value
 
 class ForgotPasswordSerializer(serializers.Serializer):
@@ -156,7 +156,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
         phone = attrs.get("phone")
         email = attrs.get("email")
         if not phone and not email:
-            raise serializers.ValidationError("Provide either phone number or email.")
+            raise serializers.ValidationError({"detail": "Provide either phone number or email."})
         if phone:
             user = User.objects.filter(
                 phone_numbers__number=phone,
@@ -168,7 +168,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
                 is_active=True
             ).first()
         if not user:
-            raise serializers.ValidationError("User not found.")
+            raise serializers.ValidationError({"detail": "User not found."})
         attrs["user"] = user
         return attrs
     
@@ -180,14 +180,14 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['re_new_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError({"detail": "Passwords do not match."})
         try:
             uid_decoded = decode_uid(attrs['uid'])
             self.user = User.objects.get(pk=uid_decoded)
         except (User.DoesNotExist, ValueError, TypeError):
-            raise serializers.ValidationError("Invalid UID.")
+            raise serializers.ValidationError({"detail": "Invalid UID."})
         if not default_token_generator.check_token(self.user, attrs['token']):
-            raise serializers.ValidationError("Invalid or expired token.")
+            raise serializers.ValidationError({"detail": "Invalid or expired token."})
         return attrs
 
     def save(self):
@@ -201,16 +201,16 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     def validate_new_password(self, value):
         if len(value) < 6:
-            raise serializers.ValidationError("Password must be at least 6 characters long.")
+            raise serializers.ValidationError({"detail": "Password must be at least 6 characters long."})
         return value
 
     def validate(self, attrs):
         user = self.context["request"].user
         if not user.check_password(attrs["old_password"]):
-            raise serializers.ValidationError({"old_password": "Wrong password"})
+            raise serializers.ValidationError({"detail": "Wrong password"})
         
         if attrs["new_password"] != attrs["confirm_password"]:
-                raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+                raise serializers.ValidationError({"detail": "Passwords do not match"})
         return attrs
 
     def save(self, **kwargs):
@@ -274,29 +274,27 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
         re_password = attrs.get("re_password")
 
         if password != re_password:
-            raise serializers.ValidationError({
-                "re_password": "Passwords do not match."
-            })
+            raise serializers.ValidationError({"detail": "Passwords do not match."})
 
         if password is not None and len(password) < 8: 
             raise serializers.ValidationError({
-                "password": "Password must be at least 8 characters long."
+                "detail": "Password must be at least 8 characters long."
             })
 
         user = self.context["request"].user
 
         if user.company is None:
-            raise serializers.ValidationError("User must be associated with a company.")
+            raise serializers.ValidationError({"detail": "User must be associated with a company."})
 
         check_company = user.company    
 
         try:
             check_subs = user.company.subscription
         except Subscription.DoesNotExist:
-            raise serializers.ValidationError("Company has no subscription.")
+            raise serializers.ValidationError({"detail": "Company has no subscription."})
 
         if not check_subs.active:
-            raise serializers.ValidationError("Subscription is not active.")
+            raise serializers.ValidationError({"detail": "Subscription is not active."})
 
         if check_company.member_count >= check_subs.plan.user_limit:
             raise serializers.ValidationError(
@@ -307,17 +305,17 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
 
     def validate_phone(self, value):
         if PhoneNumber.objects.filter(number=value).exists():
-            raise serializers.ValidationError("This phone number is already in use.")
+            raise serializers.ValidationError({"detail": "This phone number is already in use."})
         return value
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("This email is already in use.")
+            raise serializers.ValidationError({"detail": "This email is already in use."})
         return value
 
     def validate_username(self, value):
         if User.objects.filter(username__iexact=value).exists():
-            raise serializers.ValidationError("This username is already in use.")
+            raise serializers.ValidationError({"detail": "This username is already in use."})
         return value
 
     def create(self, validated_data):
@@ -351,7 +349,7 @@ class LogoutSerializer(serializers.Serializer):
 
     def validate(self, data):
         if not data['refresh']:
-            raise serializers.ValidationError("Refresh token cannot be empty.")
+            raise serializers.ValidationError({"detail": "Refresh token cannot be empty."})
         return data
     
 class OTPResetSerializer(serializers.Serializer):
@@ -363,11 +361,11 @@ class OTPResetSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['re_new_password']:
-            raise serializers.ValidationError("Passwords do not match.")
+            raise serializers.ValidationError({"detail": "Passwords do not match."})
         email = attrs.get('email')
         phone = attrs.get('phone')
         if not email and not phone:
-            raise serializers.ValidationError("Provide either phone or email.")
+            raise serializers.ValidationError({"detail": "Provide either phone or email."})
         if phone:
             phone = normalize_phone(phone)
             user = User.objects.filter(phone_numbers__number=phone, is_active=True).first()
@@ -376,25 +374,25 @@ class OTPResetSerializer(serializers.Serializer):
             user = User.objects.filter(email=email, is_active=True).first()
             otp_type = OTPCode.TYPE_EMAIL
         if not user:
-            raise serializers.ValidationError("User not found.")
+            raise serializers.ValidationError({"detail": "User not found."})
         
         # Get the latest unused OTP for this purpose and type
+        print(user.email, otp_type,OTPCode.PURPOSE_RESET)
         otp_obj = OTPCode.objects.filter(
             user=user,
             purpose=OTPCode.PURPOSE_RESET,
-            type=otp_type,
             used=False
         ).order_by('-created_at').first()
         
         if not otp_obj:
-            raise serializers.ValidationError("No valid OTP found for reset.")
+            raise serializers.ValidationError({"detail": "No valid OTP found for reset."})
         
         if otp_obj.is_expired:
-            raise serializers.ValidationError("OTP has expired.")
+            raise serializers.ValidationError({"detail": "OTP has expired."})
         
         if otp_obj.is_locked:
             otp_obj.mark_used()
-            raise serializers.ValidationError("Too many failed attempts. Please request a new OTP.")
+            raise serializers.ValidationError({"detail": "Too many failed attempts. Please request a new OTP."})
         
         # Verify the OTP using the model's method
         verified = otp_obj.verify(attrs['otp'])
@@ -410,3 +408,4 @@ class OTPResetSerializer(serializers.Serializer):
         user = self.validated_data['user']
         user.set_password(self.validated_data['new_password'])
         user.save()
+

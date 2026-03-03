@@ -53,8 +53,8 @@ class AuthViewSet(GenericViewSet):
         if not otp.verify(serializer.validated_data["code"]):
             if otp.is_locked:
                 otp.mark_used()
-                raise serializers.ValidationError("Too many failed attempts. OTP invalidated.")
-            raise serializers.ValidationError("Incorrect OTP code.")
+                raise serializers.ValidationError({"detail": "Too many failed attempts. OTP invalidated."})
+            raise serializers.ValidationError({"detail": "Incorrect OTP code."})
         purpose = otp.purpose
         if purpose in [OTPCode.PURPOSE_SIGNUP, OTPCode.PURPOSE_VERIFY]:
             user.is_active = True
@@ -67,7 +67,7 @@ class AuthViewSet(GenericViewSet):
                 user.is_email_verified = True
             user.save()
             otp.mark_used()
-            return Response({"message": "OTP verified successfully"}, status=status.HTTP_200_OK)
+            return Response({"detail": "OTP verified successfully"}, status=status.HTTP_200_OK)
         elif purpose == OTPCode.PURPOSE_RESET:
             reset_token = default_token_generator.make_token(user)
             uid = encode_uid(user.pk)
@@ -79,7 +79,7 @@ class AuthViewSet(GenericViewSet):
             }, status=status.HTTP_200_OK)
         else:
             otp.mark_used()
-            raise serializers.ValidationError("Invalid OTP purpose.")
+            raise serializers.ValidationError({"detail": "Invalid OTP purpose."})
 
     # @method_decorator(ratelimit(key='ip', rate='5/m', method='GET', block=True))
     @action(detail=False, methods=['get'], url_path='activate/(?P<uid>[^/.]+)/(?P<token>[^/.]+)')
@@ -94,7 +94,7 @@ class AuthViewSet(GenericViewSet):
             user.is_active = True
             user.is_email_verified = True
             user.save(update_fields=["is_active", "is_email_verified"])
-            return Response({"message": "Account activated successfully"}, status=status.HTTP_200_OK)
+            return Response({"detail": "Account activated successfully"}, status=status.HTTP_200_OK)
         else:
             return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -108,8 +108,8 @@ class AuthViewSet(GenericViewSet):
         try:
             send_activation_email(user, request=request)
         except Exception:
-            return Response({"error": "Failed to send activation email"}, status=500)
-        return Response({"message": "Activation email resent"}, status=200)
+            return Response({"detail": "Failed to send activation email"}, status=500)
+        return Response({"detail": "Activation email resent"}, status=200)
 
     # @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
     @action(detail=False, methods=["post"], url_path="forgot-password",authentication_classes=[],permission_classes=[AllowAny])
@@ -125,24 +125,24 @@ class AuthViewSet(GenericViewSet):
                 send_otp_to_phone(otp_code=otp, phone=serializer.validated_data.get("phone"))
             else:
                 send_otp_email(user=user, otp_code=otp, purpose="reset_password")
-            return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+            return Response({"detail": "OTP sent successfully"}, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Failed to send OTP for password reset: {e}")
-            return Response({"error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-    @action(detail=False, methods=['post'], url_path='reset-password')
+    @action(detail=False, methods=['post'], url_path='reset-password',authentication_classes=[],permission_classes=[AllowAny])
     def reset_password(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"message": "Password reset successfully"}, status=status.HTTP_200_OK)
+        return Response({"detail": "Password reset successfully"}, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=["post"],url_path="change-password",permission_classes=[IsAuthenticated])
     def change_password(self, request):
         serializer = self.get_serializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"message": "Password changed successfully"},status=status.HTTP_200_OK)
+        return Response({"detail": "Password changed successfully"},status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['post'], url_path='logout', permission_classes=[IsAuthenticated])
     def logout(self, request):
@@ -153,11 +153,11 @@ class AuthViewSet(GenericViewSet):
             token = RefreshToken(serializer.validated_data['refresh'])
             token.blacklist() 
 
-            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+            return Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
         except TokenError:
-            return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileViewSet(viewsets.ModelViewSet):

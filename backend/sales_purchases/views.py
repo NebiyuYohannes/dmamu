@@ -19,7 +19,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if not hasattr(self.request.user, 'company') or not self.request.user.company:
-            raise serializers.ValidationError("User must have an associated company.")
+            raise serializers.ValidationError({"detail": "User must have an associated company."})
         serializer.save(company=self.request.user.company)
 
 
@@ -36,7 +36,7 @@ class PurchaseViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if not hasattr(self.request.user, 'company') or not self.request.user.company:
-            raise serializers.ValidationError("User must have an associated company.")
+            raise serializers.ValidationError({"detail": "User must have an associated company."})
         serializer.save(company=self.request.user.company)
 
 class PurchaseDropdownViewSet(viewsets.ReadOnlyModelViewSet):

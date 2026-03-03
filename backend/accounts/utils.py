@@ -24,19 +24,19 @@ def generate_otp(length=6):
 def normalize_phone(phone_str):
     """Normalize and validate a phone number string."""
     if not phone_str.startswith("+"):
-        raise ValidationError("Invalid phone number format (e.g., use +251912345678).")
+        raise ValidationError({"detail": "Invalid phone number format (e.g., use +251912345678)."})
     try:
         phone = PhoneNumber.from_string(phone_str)
     except Exception:
-        raise ValidationError("Invalid phone number format.")
+        raise ValidationError({"detail": "Invalid phone number format."})
     if not phone.is_valid():
-        raise ValidationError("Invalid phone number.")
+        raise ValidationError({"detail": "Invalid phone number."})
     return phone.as_e164
 
 def create_otp_for_user(user, otp_type=OTPCode.TYPE_EMAIL, seconds=None, purpose=OTPCode.PURPOSE_SIGNUP):
     """Create OTP with expiration and purpose."""
     otp = generate_otp()
-    expiry_seconds = seconds or settings.OTP_EXPIRY_SECONDS  # Default from settings, e.g., 300 for 5 mins
+    expiry_seconds = seconds or settings.OTP_EXPIRY_SECONDS  
     expires_at = timezone.now() + timedelta(seconds=expiry_seconds)
     otp_obj = OTPCode.objects.create(
         user=user,

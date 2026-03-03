@@ -26,9 +26,7 @@ class CategorySerializer(serializers.ModelSerializer):
             queryset = queryset.exclude(pk=self.instance.pk)
 
         if queryset.exists():
-            raise serializers.ValidationError({
-                'name': 'This category name is already taken.'
-            })
+            raise serializers.ValidationError('This category name is already taken.')
 
         attrs['name'] = name.capitalize()
         return attrs

@@ -8,7 +8,7 @@ class HomeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"message": "Hello home"})
+        return Response({"detail": "Hello home"})
 
 
 

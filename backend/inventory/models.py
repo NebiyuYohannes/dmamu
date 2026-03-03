@@ -77,7 +77,7 @@ class Inventory(models.Model):
         if self.company_id is None:
             self.company = self.item.company
         if self.item.company != self.company or self.warehouse.company != self.company:
-            raise ValidationError("Item, Warehouse, and Inventory must belong to the same company.")
+            raise ValidationError({"detail": "Item, Warehouse, and Inventory must belong to the same company."})
         super().clean()
 
     def save(self, *args, **kwargs):
@@ -123,11 +123,11 @@ class StockMovement(models.Model):
 
     def clean(self):
         if self.purchase and self.sale:
-            raise ValidationError("Movement cannot be linked to both purchase and sale.")
+            raise ValidationError({"detail": "Movement cannot be linked to both purchase and sale."})
         if self.movement_type == "purchase" and not self.purchase:
-            raise ValidationError("Purchase movement must link to a Purchase record.")
+            raise ValidationError({"detail": "Purchase movement must link to a Purchase record."})
         if self.movement_type == "sale" and not self.sale:
-            raise ValidationError("Sale movement must link to a Sale record.")
+            raise ValidationError({"detail": "Sale movement must link to a Sale record."})
 
         if self.movement_type in ['purchase', 'transfer_in']:
             if self.quantity <= 0:
@@ -137,14 +137,14 @@ class StockMovement(models.Model):
                 raise ValidationError(f"Quantity must be negative for '{self.movement_type}' movements.")
         elif self.movement_type == 'adjustment':
             if self.quantity == 0:
-                raise ValidationError("Adjustment quantity cannot be zero.")
+                raise ValidationError({"detail": "Adjustment quantity cannot be zero."})
 
         super().clean()
 
     def save(self, *args, **kwargs):
             self.full_clean() 
             if self.pk:
-                raise ValidationError("Editing stock movements is not allowed.")
+                raise ValidationError({"detail": "Editing stock movements is not allowed."})
             with transaction.atomic():
                 self.inventory.current_stock += self.quantity
                 self.inventory.save(update_fields=['current_stock'])

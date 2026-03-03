@@ -101,5 +101,5 @@ class SupplierViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if not hasattr(self.request.user, 'company') or not self.request.user.company:
-            raise ValidationError("User must have an associated company.")
+            raise ValidationError({"detail": "User must have an associated company."})
         serializer.save(company=self.request.user.company)

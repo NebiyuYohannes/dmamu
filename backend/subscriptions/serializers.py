@@ -76,9 +76,9 @@ class PayNowSerializer(serializers.Serializer):
 
         if data['payment_method'].code == 'BANK':
             if not data.get('transaction_id'):
-                raise serializers.ValidationError({"transaction_id": "Required"})
+                raise serializers.ValidationError({"detail": "transaction id Required"})
             if not data.get('proof'):
-                raise serializers.ValidationError({"proof": "Please upload proof"})
+                raise serializers.ValidationError({"detail": "Please upload proof"})
 
         return data
 

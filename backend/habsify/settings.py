@@ -185,19 +185,19 @@ REST_FRAMEWORK = {
     #     'rest_framework.renderers.JSONRenderer',
     # ],
 }
-# SIMPLE_JWT = {
-#    'AUTH_HEADER_TYPES': ('Bearer',),
-#    'BLACKLIST_AFTER_ROTATION': True,
-#    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-# }
 SIMPLE_JWT = {
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,     
-    'BLACKLIST_AFTER_ROTATION': True,      
-    'UPDATE_LAST_LOGIN': True,
+   'AUTH_HEADER_TYPES': ('Bearer',),
+   'BLACKLIST_AFTER_ROTATION': True,
+   'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
 }
+# SIMPLE_JWT = {
+#     'AUTH_HEADER_TYPES': ('Bearer',),
+#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  
+#     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+#     'ROTATE_REFRESH_TOKENS': True,     
+#     'BLACKLIST_AFTER_ROTATION': True,      
+#     'UPDATE_LAST_LOGIN': True,
+# }
 
 # Djoser settings
 DJOSER = {
@@ -275,3 +275,5 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+
+OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=2,cast=int)

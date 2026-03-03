@@ -41,29 +41,29 @@ class SaleSerializer(serializers.ModelSerializer):
 
         if status == PaymentStatus.PAID:
             if not account or not payment_method:
-                raise serializers.ValidationError("For 'paid' status, account and payment_method are required.")
+                raise serializers.ValidationError({"detail": "For 'paid' status, account and payment_method are required."})
             if payment_method == 'bank_transfer':
                 if account.account_type != 'bank':
-                    raise serializers.ValidationError("Bank Transfer requires a Bank account.")
+                    raise serializers.ValidationError({"detail": "Bank Transfer requires a Bank account."})
                 if account.account_number in ['', None]:
-                    raise serializers.ValidationError("Choose proper account with number.")
+                    raise serializers.ValidationError({"Choose proper account with number."})
             elif payment_method == 'cash':
                 if account.account_type != 'cash':
-                    raise serializers.ValidationError("Cash payment requires a Cash account.")
+                    raise serializers.ValidationError({"detail": "Cash payment requires a Cash account."})
             else:
-                raise serializers.ValidationError("Payment method must be 'cash' or 'bank_transfer'.")
+                raise serializers.ValidationError({"detail": "Payment method must be 'cash' or 'bank_transfer'."})
 
             try:
                 inventory = Inventory.objects.get(item=data['item'], warehouse=data['warehouse'], company=self.context['request'].user.company)
                 if inventory.current_stock < data['quantity']:
-                    raise serializers.ValidationError("Product does not have enough stock in the selected warehouse.")
+                    raise serializers.ValidationError({"detail": "Product does not have enough stock in the selected warehouse."})
             except Inventory.DoesNotExist:
-                raise serializers.ValidationError("Product does not exist in the selected warehouse.")
+                raise serializers.ValidationError({"detail": "Product does not exist in the selected warehouse."})
             return data
 
         if status == PaymentStatus.PARTIAL:
             if not account or not payment_method:
-                raise serializers.ValidationError("For 'partial' status, account and payment_method are required, and you must add transactions separately.")
+                raise serializers.ValidationError({"detail": "For 'partial' status, account and payment_method are required, and you must add transactions separately."})
 
         return data
 
@@ -99,25 +99,25 @@ class PurchaseSerializer(serializers.ModelSerializer):
 
         if status == PaymentStatus.PAID:
             if not account or not payment_method:
-                raise serializers.ValidationError("For 'paid' status, account and payment_method are required.")
+                raise serializers.ValidationError({"detail": "For 'paid' status, account and payment_method are required."})
             if payment_method == 'bank_transfer':
                 if account.account_type != 'bank':
-                    raise serializers.ValidationError("Bank Transfer requires a Bank account.")
+                    raise serializers.ValidationError({"detail": "Bank Transfer requires a Bank account."})
                 if account.account_number in ['', None]:
-                    raise serializers.ValidationError("Choose proper account with number.")
+                    raise serializers.ValidationError({"detail": "Choose proper account with number."})
                 if account.balance < data['total']:
-                    raise serializers.ValidationError("Insufficient balance in selected account.")
+                    raise serializers.ValidationError({"detail": "Insufficient balance in selected account."})
             elif payment_method == 'cash':
                 if account.account_type != 'cash':
-                    raise serializers.ValidationError("Cash payment requires a Cash account.")
+                    raise serializers.ValidationError({"detail": "Cash payment requires a Cash account."})
                 if account.balance < data['total']:
-                    raise serializers.ValidationError("Insufficient balance in selected account.")
+                    raise serializers.ValidationError({"detail": "Insufficient balance in selected account."})
             else:
-                raise serializers.ValidationError("Payment method must be 'cash' or 'bank_transfer'.")
+                raise serializers.ValidationError({"detail": "Payment method must be 'cash' or 'bank_transfer'."})
 
         if status == PaymentStatus.PARTIAL:
             if not account or not payment_method:
-                raise serializers.ValidationError("For 'partial' status, account and payment_method are required, and you must add transactions separately.")
+                raise serializers.ValidationError({"detail": "For 'partial' status, account and payment_method are required, and you must add transactions separately."})
 
         return data
 
