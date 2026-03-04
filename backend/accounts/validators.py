@@ -12,6 +12,6 @@ def validate_unique_username(value):
         raise serializers.ValidationError({"detail": "Username already taken"})
 
 
-# def validate_unique_phone(number):
-#     if PhoneNumber.objects.filter(number=number).exists():
-#         raise serializers.ValidationError({"detail": "Phone number already in use"})
+def validate_unique_phone(number):
+    if PhoneNumber.objects.filter(number=number).exists():
+        raise serializers.ValidationError({"detail": "Phone number already in use"})
