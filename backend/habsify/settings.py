@@ -154,7 +154,8 @@ AUTH_USER_MODEL = "accounts.User"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 BASE_URL=config("BASE_URL", default="localhost:8000")
-SITE_DOMAIN=config("SITE_DOMAIN", default="localhost:8000")
+SITE_DOMAIN=config("SITE_DOMAIN", default="localhost:5173")
+CLIENT_URL=config("CLIENT_URL",default="localhost:5173")
 SITE_PROTOCOL=config("SITE_PROTOCOL", default="http")
 LOGIN_FIELD="email"
 
