@@ -35,7 +35,7 @@ def generate_daily_notifications():
             company=sale.company,
             user=sale.company.owner,
             type='payment_due',
-            message=f"Payment due for Sale #{sale.id} to {sale.customer.name}: Remain {sale.get_balance()}"
+            message=f"Payment due for Sale #{sale.id} to {sale.customer.name}: Remain {sale.get_balance}"
         )
 
     overdue_purchases = Purchase.objects.filter(status='partial', date__lt=date.today())
@@ -44,5 +44,5 @@ def generate_daily_notifications():
             company=purchase.company,
             user=purchase.company.owner,
             type='payment_due',
-            message=f"Payment due for Purchase #{purchase.id} to {purchase.supplier.name}: Remain {purchase.get_balance()}"
+            message=f"Payment due for Purchase #{purchase.id} to {purchase.supplier.name}: Remain {purchase.get_balance}"
         )
