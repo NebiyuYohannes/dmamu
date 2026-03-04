@@ -73,7 +73,7 @@ def send_activation_email(user, request=None):
     uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
     protocol = getattr(settings, "SITE_PROTOCOL", "http")
-    domain = getattr(settings, "SITE_DOMAIN", "localhost:8000")
+    domain = getattr(settings, "CLIENT_URL", "localhost:5173")
     activation_url = f"{protocol}://{domain}/{settings.DJOSER['ACTIVATION_URL'].format(uid=uid, token=token)}"
 
     context = {
