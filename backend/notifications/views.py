@@ -43,7 +43,7 @@ class NotificationViewSet(mixins.ListModelMixin,mixins.RetrieveModelMixin,viewse
 
     @action(detail=False, methods=["get"])
     def unread(self, request):
-        qs = self.get_queryset().filter(is_read=False)
+        qs = self.filter_queryset(self.get_queryset().filter(is_read=False))
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(qs, request)
         serializer = self.get_serializer(page, many=True)
