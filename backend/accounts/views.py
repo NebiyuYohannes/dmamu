@@ -23,6 +23,7 @@ from .permissions import IsBusinessAdmin,IsBusinessOrAdmin
 from rest_framework.viewsets import GenericViewSet
 # from ratelimit.decorators import ratelimit  
 
+
 class AuthViewSet(GenericViewSet):
     permission_classes = [AllowAny]
 
@@ -159,28 +160,35 @@ class AuthViewSet(GenericViewSet):
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = [IsAdminUser]
 
-    @action(detail=False, methods=['get', 'put'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
         try:
             profile = Profile.objects.get(user=request.user)
         except Profile.DoesNotExist:
-            return Response({"detail": "Profile not found."}, status=404)
+            return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
         
         if request.method == 'GET':
-            serializer = ProfileSerializer(profile)
+            serializer = self.get_serializer(profile)
             return Response(serializer.data)
         
-        if request.method == 'PUT':
-            serializer = ProfileSerializer(profile, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
+        elif request.method == 'PATCH':
+            print("=== Incoming PATCH data ===")           
+            print(request.data)                             
+            serializer = self.get_serializer(profile, data=request.data, partial=True)
+            if not serializer.is_valid():
+                print("=== Validation Errors ===")          
+                print(serializer.errors)                    
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
             serializer.save()
             return Response(serializer.data)
+        
+        return Response({"detail": "Method not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 class EmployeeCreateViewSet(mixins.CreateModelMixin, GenericViewSet):
     queryset = User.objects.all()

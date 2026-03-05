@@ -240,6 +240,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     is_phone_verified = serializers.CharField(source="user.is_phone_verified", read_only=True)
     is_email_verified = serializers.CharField(source="user.is_email_verified", read_only=True)
     joined_at = serializers.CharField(source="user.company.created_at", read_only=True)
+    
 
     class Meta:
         model = Profile
