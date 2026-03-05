@@ -1,29 +1,54 @@
 from rest_framework import serializers
 from .models import *
-
+from datetime import timedelta
+from django.db import transaction
+from dateutil.relativedelta import relativedelta
 
 class FeatureSerializer(serializers.ModelSerializer):
+    is_included = serializers.SerializerMethodField()
+
     class Meta:
         model = Feature
-        fields = ['id', 'name', 'code', 'description']
+        fields = ['id', 'name', 'code', 'description', 'is_included']
 
+    def get_is_included(self, obj):
+        plan = self.context.get('plan') 
+        if plan:
+            return obj in plan.features.all()
+        return False
+    
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
-    features = FeatureSerializer(many=True, read_only=True)
+    features = serializers.SerializerMethodField()
+    has_used_trial = serializers.SerializerMethodField()
+
+    def get_has_used_trial(self, obj):
+        request = self.context.get('request')
+        if request and request.user and hasattr(request.user, 'company'):
+            return request.user.company.has_used_trial
+        return False
 
     class Meta:
         model = SubscriptionPlan
-        fields = ['id', 'name', 'price_monthly', 'user_limit', 'trial_days', 'features']
+        fields = ['id', 'name', 'price_monthly', 'user_limit', 'trial_days','has_used_trial', 'features']
+
+    def get_features(self, obj):
+        all_features = Feature.objects.all()
+        return FeatureSerializer(all_features, many=True, context={'plan': obj}).data
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan = SubscriptionPlanSerializer(read_only=True)
     company_name = serializers.CharField(source='company.name', read_only=True)
+    has_used_trial =serializers.SerializerMethodField()
     days_remaining = serializers.ReadOnlyField()
     status = serializers.CharField(read_only=True)
 
+    def get_has_used_trial(self,obj):
+        return bool(obj.company.has_used_trial)
+
     class Meta:
         model = Subscription
-        fields = ['uid', 'company_name', 'plan', 'start_date', 'end_date',
-                  'active', 'days_remaining', 'status']
+        fields = ['uid', 'company_name', 'start_date', 'end_date','has_used_trial',
+                  'active', 'days_remaining', 'status','members_usage', 'plan']
         read_only_fields = ['uid', 'company_name', 'active', 'start_date', 'end_date']
 
 class FreeTrialSerializer(serializers.Serializer):
@@ -33,30 +58,38 @@ class FreeTrialSerializer(serializers.Serializer):
         company = self.context['request'].user.company
         if company.has_used_trial:
             raise serializers.ValidationError(
-                "This company has already used its free trial on a previous plan. "
-                "Please subscribe to a paid plan or contact support."
+                "This company has already used its free trial on a previous plan."
             )
         return data
 
     def create(self, validated_data):
-        plan = SubscriptionPlan.objects.get(id=validated_data['plan_id'])
+        plan = SubscriptionPlan.objects.get(pk=validated_data['plan_id'])
         company = self.context['request'].user.company
 
-        company.has_used_trial = True
-        company.save()
+        with transaction.atomic():
+            current_sub = getattr(company, 'subscription', None)
 
-        subscription, _ = Subscription.objects.update_or_create(
-            company=company,
-            defaults={
-                'plan': plan,
-                'start_date': timezone.now().date(),
-                'end_date': timezone.now().date() + timedelta(days=plan.trial_days),
-                'status': 'trialing',
-                'active': True,
-            }
-        )
+            if current_sub and getattr(current_sub, 'is_active_now', False):
+                start_date = current_sub.end_date + timedelta(days=1)
+            else:
+                start_date = timezone.now().date()
+
+            subscription, created = Subscription.objects.update_or_create(
+                company=company,
+                defaults={
+                    'plan': plan,
+                    'start_date': start_date,
+                    'end_date': start_date + timedelta(days=plan.trial_days),
+                    'status': Subscription.STATUS_TRIALING,
+                    'active': True,
+                }
+            )
+
+            company.has_used_trial = True
+            company.save(update_fields=['has_used_trial'])
+
         return subscription
-
+    
 class PayNowSerializer(serializers.Serializer):
     plan_id = serializers.IntegerField()
     payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.filter(is_active=True))
@@ -65,8 +98,6 @@ class PayNowSerializer(serializers.Serializer):
 
     def validate(self, data):
         company = self.context['request'].user.company
-
-        # Block if already active, trialing, OR pending (prevent spam/multiple pendings)
         existing_sub = getattr(company, 'subscription', None)
         if existing_sub and existing_sub.status in ['trialing', 'active', 'pending_payment']:
             raise serializers.ValidationError(
@@ -76,22 +107,30 @@ class PayNowSerializer(serializers.Serializer):
 
         if data['payment_method'].code == 'BANK':
             if not data.get('transaction_id'):
-                raise serializers.ValidationError({"detail": "transaction id Required"})
+                raise serializers.ValidationError({"transaction_id": "Required for BANK payments."})
             if not data.get('proof'):
-                raise serializers.ValidationError({"detail": "Please upload proof"})
+                raise serializers.ValidationError({"proof": "Please upload proof for BANK payments."})
 
         return data
 
     def create(self, validated_data):
         plan = SubscriptionPlan.objects.get(id=validated_data['plan_id'])
         company = self.context['request'].user.company
+        existing_sub = getattr(company, 'subscription', None)
+
+        if existing_sub and existing_sub.is_currently_valid:
+            start_date = existing_sub.end_date + timedelta(days=1)
+        else:
+            start_date = timezone.now().date()
+
+        end_date = start_date + relativedelta(months=1)
 
         subscription, _ = Subscription.objects.update_or_create(
             company=company,
             defaults={
                 'plan': plan,
-                'start_date': timezone.now().date(),
-                'end_date': timezone.now().date() + timedelta(days=30),
+                'start_date': start_date,
+                'end_date': end_date,
                 'status': 'pending_payment',
                 'active': False,
             }
@@ -111,7 +150,6 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentMethod
         fields = '__all__'
-
 
 class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:

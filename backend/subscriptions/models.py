@@ -2,8 +2,7 @@ import uuid
 from django.db import models
 from django.utils import timezone
 from core.models import Company
-from datetime import date, timedelta
-
+from datetime import date
 
 class Feature(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -56,6 +55,12 @@ class Subscription(models.Model):
     active = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
 
+    @property
+    def members_usage(self):
+        user_count = self.company.customers.count() + self.company.suppliers.count()
+        limit = self.plan.user_limit
+        return f"{user_count} / {limit} members"
+
     def __str__(self):
         return f"{self.company.name} - {self.plan.name}"
 
@@ -65,6 +70,14 @@ class Subscription(models.Model):
         if self.status in ['expired', 'cancelled', 'pending_payment']:
             return False
         return self.end_date is None or self.end_date >= date.today()
+    
+    def is_active_now(self):
+        if self.status not in [self.STATUS_ACTIVE, self.STATUS_TRIALING]:
+            return False
+        if self.start_date is None or self.end_date is None:
+            return False
+        today = date.today()
+        return self.start_date <= today <= self.end_date
 
     @property
     def days_remaining(self):
