@@ -15,6 +15,7 @@ from .validators import validate_unique_email, validate_unique_username
 from django.contrib.auth import authenticate
 from subscriptions.models import Subscription
 from datetime import timedelta
+from phonenumber_field.serializerfields import PhoneNumberField
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -221,35 +222,66 @@ class ChangePasswordSerializer(serializers.Serializer):
         return user
 
 class ProfileSerializer(serializers.ModelSerializer):
-    user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_username = serializers.CharField(source='user.username', read_only=True)
-    user_first_name = serializers.CharField(source='user.first_name')
-    user_last_name = serializers.CharField(source='user.last_name')
-    role = serializers.CharField(source='user.role')
+
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_username = serializers.CharField(source="user.username", read_only=True)
+
+    user_first_name = serializers.CharField(source="user.first_name")
+    user_last_name = serializers.CharField(source="user.last_name")
+
+    role = serializers.CharField(source="user.role", read_only=True)
+
+    phone_number = serializers.CharField(
+        source="user.phone_numbers.number",
+        required=False,
+        allow_null=True,
+        allow_blank=True
+    )
+    is_phone_verified = serializers.CharField(source="user.is_phone_verified", read_only=True)
+    is_email_verified = serializers.CharField(source="user.is_email_verified", read_only=True)
+    joined_at = serializers.CharField(source="user.company.created_at", read_only=True)
 
     class Meta:
         model = Profile
         fields = [
-            'updated_at',
-            'user_email',
-            'user_username',
-            'user_first_name',
-            'user_last_name',
-            'role',
-            'street_address',
-            'city',
-            'state',
-            'zip_code',
+            "updated_at",
+            "avatar",
+            "user_email",
+            "user_username",
+            "user_first_name",
+            "user_last_name",
+            "role",
+            "phone_number",
+            "is_phone_verified",
+            "is_email_verified",
+            "joined_at",
+            "street_address",
+            "city",
+            "state",
+            "zip_code",
+            "country",
         ]
-        read_only_fields = ['updated_at']
+        read_only_fields = ["updated_at"]
 
     def update(self, instance, validated_data):
-        user_data = validated_data.pop('user', {})
-       
-        if user_data:
-            for attr, value in user_data.items():
-                setattr(instance.user, attr, value)
-            instance.user.save()
+
+        user_data = validated_data.pop("user", {})
+        phone_data = user_data.pop("phone_numbers", None)
+
+        # update user fields
+        user = instance.user
+        for attr, value in user_data.items():
+            setattr(user, attr, value)
+        user.save()
+
+        # update phone number
+        if phone_data:
+            number = phone_data.get("number")
+
+            phone_obj, created = PhoneNumber.objects.get_or_create(user=user)
+
+            phone_obj.number = number
+            phone_obj.save()
 
         return super().update(instance, validated_data)
     
