@@ -92,9 +92,17 @@ class FreeTrialSerializer(serializers.Serializer):
     
 class PayNowSerializer(serializers.Serializer):
     plan_id = serializers.IntegerField()
-    payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.filter(is_active=True))
+    payment_method = serializers.PrimaryKeyRelatedField(
+        queryset=PaymentMethod.objects.filter(is_active=True),
+        write_only=True  
+    )
+    bank_account = serializers.PrimaryKeyRelatedField(
+        queryset=BankAccount.objects.all(), 
+        required=False,
+        write_only=True  
+    )
     transaction_id = serializers.CharField(required=False, allow_blank=True)
-    proof = serializers.FileField(required=False)
+    # proof = serializers.FileField(required=False)
 
     def validate(self, data):
         company = self.context['request'].user.company
@@ -107,9 +115,11 @@ class PayNowSerializer(serializers.Serializer):
 
         if data['payment_method'].code == 'BANK':
             if not data.get('transaction_id'):
-                raise serializers.ValidationError({"transaction_id": "Required for BANK payments."})
-            if not data.get('proof'):
-                raise serializers.ValidationError({"proof": "Please upload proof for BANK payments."})
+                raise serializers.ValidationError({"detail": "Required for BANK payments."})
+            # if not data.get('proof'):
+            #     raise serializers.ValidationError({"proof": "Please upload proof for BANK payments."})
+            if not data.get('bank_account'):
+                raise serializers.ValidationError({"detail": "Required for BANK payments."})
 
         return data
 
@@ -147,11 +157,21 @@ class PayNowSerializer(serializers.Serializer):
         return subscription
      
 class PaymentMethodSerializer(serializers.ModelSerializer):
+    label = serializers.SerializerMethodField()
+
+    def get_label(self,obj):
+        return obj.name
+
     class Meta:
         model = PaymentMethod
-        fields = '__all__'
+        fields = ["id", "label"]
 
 class BankAccountSerializer(serializers.ModelSerializer):
+    label = serializers.SerializerMethodField()
+
+    def get_label(self,obj):
+        return f"{obj.bank_name} | {obj.account_number}"
+
     class Meta:
         model = BankAccount
-        fields = '__all__'
+        fields = ["id", "label"]
