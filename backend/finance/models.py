@@ -47,7 +47,9 @@ class Transaction(models.Model):
         on_delete=models.SET_NULL,
         related_name='transactions'
     )
-    
+    category = models.CharField(max_length=100, blank=True, null=True)        
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+
     def __str__(self):
         return f"{self.get_type_display()} {self.amount} on {self.date} - {self.description}"
     
