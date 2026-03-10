@@ -1,5 +1,5 @@
 from django.db.models import Sum,Q
-from rest_framework import viewsets
+from rest_framework import viewsets,generics, status
 from datetime import datetime
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from dateutil.relativedelta import relativedelta
 from crm.permissions import HasActiveSubscription
 from .models import Account, Transaction
-from .serializers import AccountSerializer, TransactionSerializer
+from .serializers import AccountSerializer, TransactionSerializer, ExpenseSerializer
 from django.utils.timezone import now
 
 
@@ -171,3 +171,14 @@ def cash_management(request):
         "total_outflows": total_outflows,
         "transaction_history": history_list
     })
+
+
+class ExpenseCreateView(generics.CreateAPIView):
+    serializer_class = ExpenseSerializer
+
+    def perform_create(self, serializer):
+        serializer.save()
+        return Response({
+            "message": "Expense added successfully",
+            "new_balance": serializer.instance.account.balance
+        }, status=status.HTTP_201_CREATED)
