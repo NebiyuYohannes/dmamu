@@ -38,3 +38,34 @@ class TransactionSerializer(serializers.ModelSerializer):
         #     data['type'] = 'outflow'  # Purchase payment = outflow
 
         return data
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    account = serializers.PrimaryKeyRelatedField(queryset=Account.objects.all())
+
+    class Meta:
+        model = Transaction
+        fields = ['account', 'amount', 'category', 'notes', 'payment_method']
+
+    def validate(self, data):
+        account = data.get('account')
+        amount = data.get('amount')
+
+        if account and amount:
+            if amount <= 0:
+                raise serializers.ValidationError({"detail": "Amount must be greater than zero."})
+
+            if amount > account.balance:
+                raise serializers.ValidationError({
+                    "detail": f"Insufficient funds in {account.name}! "
+                              f"Current balance: {account.balance}. "
+                              f"You tried to spend: {amount}"
+                })
+
+        return data
+
+    def create(self, validated_data):
+        validated_data['type'] = 'outflow'                   
+        validated_data['description'] = f"Expense: {validated_data.get('category', 'Other')}"
+        validated_data['company'] = self.context['request'].user.company
+        return super().create(validated_data)
