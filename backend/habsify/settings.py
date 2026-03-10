@@ -273,6 +273,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.tasks.generate_daily_notifications",
         "schedule": crontab(hour=0, minute=0),
     },
+    'notify-due-tasks': {
+        'task': 'tasks.tasks.notify_due_tasks',
+        'schedule': crontab(hour=0, minute=0),  
+    },
 }
 
 CORS_ALLOWED_ORIGINS = [
