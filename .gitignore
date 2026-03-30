@@ -214,6 +214,7 @@ __marimo__/
 
 # Backend environment variables
 .env.backend
+.env.pro
 README.md
 
 # Node modules
