@@ -1,4 +1,6 @@
 FROM python:3.12-slim-trixie
+
+# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -23,6 +25,7 @@ COPY . .
 
 RUN chmod +x entrypoint.sh
 
-EXPOSE 8000
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["uv", "run", "gunicorn", "habsify.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "2", "--log-level", "info"]
 
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+EXPOSE 8000
