@@ -175,6 +175,7 @@ dependencies = [
     { name = "python-decouple" },
     { name = "reportlab" },
     { name = "twilio" },
+    { name = "whitenoise" },
 ]
 
 [package.metadata]
@@ -198,6 +199,7 @@ requires-dist = [
     { name = "python-decouple", specifier = ">=3.8" },
     { name = "reportlab", specifier = ">=4.4.10" },
     { name = "twilio", specifier = ">=9.10.0" },
+    { name = "whitenoise", specifier = ">=6.12.0" },
 ]
 
 [[package]]
@@ -1291,6 +1293,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/64/6e/62daec357285b927e82263a81f3b4c1790215bc77c42530ce4a69d501a43/wcwidth-0.5.0.tar.gz", hash = "sha256:f89c103c949a693bf563377b2153082bf58e309919dfb7f27b04d862a0089333", size = 246585, upload-time = "2026-01-27T01:31:44.942Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/3e/45583b67c2ff08ad5a582d316fcb2f11d6cf0a50c7707ac09d212d25bc98/wcwidth-0.5.0-py3-none-any.whl", hash = "sha256:1efe1361b83b0ff7877b81ba57c8562c99cf812158b778988ce17ec061095695", size = 93772, upload-time = "2026-01-27T01:31:43.432Z" },
+]
+
+[[package]]
+name = "whitenoise"
+version = "6.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/2a/55b3f3a4ec326cd077c1c3defeee656b9298372a69229134d930151acd01/whitenoise-6.12.0.tar.gz", hash = "sha256:f723ebb76a112e98816ff80fcea0a6c9b8ecde835f8ddda25df7a30a3c2db6ad", size = 26841, upload-time = "2026-02-27T00:05:42.028Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/eb/d5583a11486211f3ebd4b385545ae787f32363d453c19fffd81106c9c138/whitenoise-6.12.0-py3-none-any.whl", hash = "sha256:fc5e8c572e33ebf24795b47b6a7da8da3c00cff2349f5b04c02f28d0cc5a3cc2", size = 20302, upload-time = "2026-02-27T00:05:40.086Z" },
 ]
 
 [[package]]
