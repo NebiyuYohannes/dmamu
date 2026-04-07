@@ -282,7 +282,9 @@ CELERY_BEAT_SCHEDULE = {
 # After your existing CORS settings, add/replace these:
 CORS_ALLOWED_ORIGINS = [
     "https://habsifyerp.onrender.com",
-    "http://localhost:8000"
+    "http://localhost:8000",
+    "http://localhost:3000","http://localhost:5173"
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True
