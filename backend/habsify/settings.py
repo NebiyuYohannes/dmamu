@@ -279,13 +279,25 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# After your existing CORS settings, add/replace these:
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://habsifyerp.onrender.com"
+    "https://habsifyerp.onrender.com",
 ]
+
 CORS_ALLOW_CREDENTIALS = True
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+
 
 OTP_EXPIRY_MINUTES = config("OTP_EXPIRY_MINUTES", default=2,cast=int)
 # Silence django_ratelimit warnings/errors in Docker (multi-process)
