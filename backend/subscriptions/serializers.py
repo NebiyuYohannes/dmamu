@@ -175,3 +175,17 @@ class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
         fields = ["id", "label"]
+
+class AccessStatusSerializer(serializers.Serializer):
+    company_name = serializers.CharField()
+    subscription_status = serializers.CharField()
+    days_remaining = serializers.IntegerField(required=False, allow_null=True)
+
+    user_role = serializers.CharField()
+
+    can_enter_app = serializers.BooleanField()
+    read_only = serializers.BooleanField()
+
+    action_required = serializers.CharField(
+        required=False, allow_null=True
+    )

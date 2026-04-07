@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework import viewsets,mixins
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
@@ -15,7 +16,8 @@ from .serializers import (SubscriptionPlanSerializer,
                           FreeTrialSerializer,
                           PayNowSerializer,
                           PaymentMethodSerializer,
-                          BankAccountSerializer)
+                          BankAccountSerializer,
+                          AccessStatusSerializer)
 
 class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SubscriptionPlan.objects.filter(is_active=True)
@@ -89,3 +91,40 @@ class BankAccountViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BankAccount.objects.filter(is_active=True)
     serializer_class = BankAccountSerializer
     permission_classes = [IsAuthenticated]
+
+
+class AccessStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        company = user.company
+        subscription = getattr(company, "subscription", None)
+
+        if not subscription:
+            data = {
+                "company_name": company.name,
+                "subscription_status": "NO_PLAN",
+                "user_role": user.role,
+                "can_enter_app": False,
+                "read_only": False,
+                "action_required": "CHOOSE_PLAN",
+            }
+        else:
+            # Active/trialing are full access
+            is_active = subscription.status in {
+                Subscription.STATUS_ACTIVE,
+                Subscription.STATUS_TRIALING,
+            }
+
+            data = {
+                "company_name": company.name,
+                "subscription_status": subscription.status,
+                "days_remaining": subscription.days_remaining,
+                "user_role": user.role,
+                "can_enter_app": True,
+                "read_only": not is_active,
+                "action_required": None if is_active else "RENEW_SUBSCRIPTION",
+            }
+
+        return Response(AccessStatusSerializer(data).data)
