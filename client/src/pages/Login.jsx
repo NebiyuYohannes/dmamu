@@ -9,6 +9,7 @@ export default function Login() {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
   const [resendOpen, setResendOpen] = useState(false)
   const [resendEmail, setResendEmail] = useState('')
   const [resendStatus, setResendStatus] = useState('')
@@ -20,12 +21,15 @@ export default function Login() {
       toast.error('Email and password are required')
       return
     }
+    setLoading(true)
     try {
       await login({ email, password })
       toast.success('Login successful')
       navigate('/dashboard', { replace: true })
     } catch (err) {
       toast.error('Login failed')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -66,7 +70,8 @@ export default function Login() {
                 <label className="block text-sm font-medium text-gray-700 mb-3">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -77,7 +82,8 @@ export default function Login() {
                 <label className="block text-sm font-medium text-gray-700 mb-3">Password</label>
                 <input
                   type="password"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -100,9 +106,10 @@ export default function Login() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3 !rounded-button whitespace-nowrap bg-primary text-white text-lg font-semibold hover:bg-primary/90 transition-colors"
+                disabled={loading}
+                className="w-full py-3 !rounded-button whitespace-nowrap bg-primary text-white text-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                CONTINUE
+                {loading ? 'Logging in...' : 'CONTINUE TO HABSIFY'}
               </button>
             </form>
           ) : (
@@ -111,7 +118,8 @@ export default function Login() {
                 <label className="block text-sm font-medium text-gray-700 mb-3">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg"
+                  disabled={resending}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-lg disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="you@example.com"
                   value={resendEmail}
                   onChange={(e) => setResendEmail(e.target.value)}
@@ -121,7 +129,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={resending}
-                className="w-full py-3 !rounded-button whitespace-nowrap bg-primary text-white text-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
+                className="w-full py-3 !rounded-button whitespace-nowrap bg-primary text-white text-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {resending ? 'Sending...' : 'Confirm & Send'}
               </button>
