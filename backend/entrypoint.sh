@@ -3,7 +3,7 @@ set -e
 
 echo "🚀 Starting habsify backend..."
 
-# Render.com dynamic port support (replaces hardcoded 0.0.0.0:8000)
+# Render.com dynamic port support
 if [ -n "${PORT}" ] && echo "$@" | grep -q "gunicorn"; then
   echo "→ Detected Render PORT=${PORT}, updating gunicorn bind address..."
   new_args=""
@@ -23,9 +23,10 @@ if echo "$@" | grep -q -E "gunicorn|celery"; then
     uv run python manage.py migrate --noinput
 fi
 
+# Create superuser silently if it doesn't exist
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
   echo "→ Creating superuser (if not exists)..."
-  uv run python manage.py createsuperuser --noinput || true
+  uv run python manage.py createsuperuser --noinput 2>/dev/null || true
 fi
 
 echo "→ Starting: $@"
