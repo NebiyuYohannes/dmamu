@@ -75,10 +75,10 @@ export default function Header() {
   }
 
   return (
-    <header className="w-full bg-white border-b border-gray-100 px-6 py-4 fixed top-0 left-0 right-0 z-20 md:pl-70">
+    <header className="w-full bg-white border-b border-gray-100 px-6 py-4 fixed top-0 left-0 right-0 z-50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="../../public/logo.png" alt="Habsify Logo" className="w-10 h-10 object-cover rounded-lg" />
+          <img src="/logo.png" alt="Habsify Logo" className="w-10 h-10 object-cover rounded-lg" />
           <div className="leading-tight">
             <h1 className="text-2xl font-['Roboto'] font-black text-primary tracking-wide transform hover:scale-105 transition-transform duration-200 cursor-pointer">Habsify</h1>
           </div>
