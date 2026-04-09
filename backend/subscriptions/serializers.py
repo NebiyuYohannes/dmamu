@@ -164,7 +164,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PaymentMethod
-        fields = ["id", "label"]
+        fields = ["id", "label","code"]
 
 class BankAccountSerializer(serializers.ModelSerializer):
     label = serializers.SerializerMethodField()

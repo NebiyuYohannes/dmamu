@@ -167,3 +167,4 @@ class SaleDropdownSerializer(serializers.ModelSerializer):
             f"Qty: {obj.quantity} | "
             f"Total: {obj.total}"
         )
+    

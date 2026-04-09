@@ -30,8 +30,6 @@ class SubscriptionPlan(models.Model):
         verbose_name = 'Subscription Plan'
 
 
-
-
 class Subscription(models.Model):
     STATUS_TRIALING = "trialing"
     STATUS_ACTIVE = "active"
