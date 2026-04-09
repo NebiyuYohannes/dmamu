@@ -3,6 +3,20 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import { success as toastSuccess, error as toastError } from '../services/toastService'
 import { createTask, deleteTask, listTasks, updateTask } from '../services/tasksService'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '../utils/cn'
+import { Search, Calendar, Filter, ArrowUpDown, ChevronLeft, ChevronRight, CheckCircle2, Circle, MoreVertical, Edit2, Trash2 } from 'lucide-react'
+
+// PHASE 23: Zod validation mapped to automated form handling
+const taskSchema = z.object({
+  title: z.string().min(1, 'Task title is required'),
+  priority: z.enum(['Low', 'Medium', 'High']),
+  dueDate: z.string().optional()
+})
 
 const priorityOptions = [
   { value: 'High', label: 'High Priority', color: 'bg-red-100 text-red-800' },
@@ -95,8 +109,7 @@ function formatRelativeDate(dateStr) {
 }
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [filterDate, setFilterDate] = useState('')
@@ -109,11 +122,14 @@ export default function Tasks() {
   const [sortOpen, setSortOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
-  const [form, setForm] = useState({
-    title: '',
-    priority: 'Medium',
-    dueDate: ''
+
+  // React Hook Form for the Task Modal
+  const { register, handleSubmit, reset, formState: { errors }, setValue, watch } = useForm({
+    resolver: zodResolver(taskSchema),
+    defaultValues: { title: '', priority: 'Medium', dueDate: '' }
   })
+
+  const currentPriority = watch('priority')
 
   const calendarRef = useRef(null)
   const calendarBtnRef = useRef(null)
@@ -128,38 +144,53 @@ export default function Tasks() {
   const [calendarMonth, setCalendarMonth] = useState(today.getMonth())
   const [calendarYear, setCalendarYear] = useState(today.getFullYear())
 
+  // Debouncing Search Input
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim()), 300)
     return () => clearTimeout(t)
   }, [query])
 
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    listTasks({
-      dueDate: filterDate,
-      priority: priorityFilter,
-      completed: completedFilter,
-      search: debouncedQuery,
-      ordering
-    })
-      .then((data) => {
-        if (!alive) return
-        setTasks(Array.isArray(data) ? data : [])
+  // PHASE 24: React Query replacing manual loading/state for Tasks Array
+  const { data: tasks, isLoading: loading } = useQuery({
+    queryKey: ['tasksData', filterDate, priorityFilter, completedFilter, debouncedQuery, ordering],
+    queryFn: async () => {
+      const data = await listTasks({
+        dueDate: filterDate,
+        priority: priorityFilter,
+        completed: completedFilter,
+        search: debouncedQuery,
+        ordering
       })
-      .catch(() => {
-        if (!alive) return
-        setTasks([])
-        toastError('Failed to load tasks')
-      })
-      .finally(() => {
-        if (!alive) return
-        setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [debouncedQuery, filterDate, priorityFilter, completedFilter, ordering])
+      return Array.isArray(data) ? data : []
+    },
+    initialData: [],
+    staleTime: 60 * 1000 // 1 minute
+  })
+
+  // Mutations for Task CUD Operations (Automated Refresh)
+  const saveTaskMutator = useMutation({
+    mutationFn: async (payload) => {
+      if (editingTask) return updateTask(editingTask.id, payload)
+      return createTask(payload)
+    },
+    onSuccess: () => {
+      toastSuccess(`Task ${editingTask ? 'updated' : 'created'} successfully.`)
+      queryClient.invalidateQueries({ queryKey: ['tasksData'] })
+      handleCloseModal()
+    },
+    onError: () => toastError('Unable to save task.')
+  })
+
+  const toggleTaskMutator = useMutation({
+    mutationFn: async ({ id, payload }) => updateTask(id, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasksData'] }),
+    onError: () => toastError('Unable to update task status.')
+  })
+
+  const deleteTaskMutator = useMutation({
+    mutationFn: async (id) => deleteTask(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasksData'] })
+  })
 
   useEffect(() => {
     function handleClick(event) {
@@ -205,73 +236,38 @@ export default function Tasks() {
 
   const handleOpenModal = (task = null) => {
     setEditingTask(task)
-    setForm({
-      title: task?.title ?? '',
-      priority: task?.priority ?? 'Medium',
-      dueDate: task?.dueDate ?? ''
-    })
+    if (task) {
+      reset({ title: task.title, priority: task.priority || 'Medium', dueDate: task.due_date || task.dueDate || '' })
+    } else {
+      reset({ title: '', priority: 'Medium', dueDate: '' })
+    }
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setEditingTask(null)
-    setForm({ title: '', priority: 'Medium', dueDate: '' })
+    reset()
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    const title = form.title.trim()
-    if (!title) return
-    try {
-      if (editingTask) {
-        const updated = await updateTask(editingTask.id, {
-          title,
-          priority: form.priority,
-          dueDate: form.dueDate
-        })
-        setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)))
-        toastSuccess('Task updated successfully.')
-      } else {
-        const created = await createTask({
-          title,
-          priority: form.priority,
-          dueDate: form.dueDate
-        })
-        setTasks((prev) => [created, ...prev])
-        toastSuccess('Task created successfully.')
-      }
-      handleCloseModal()
-    } catch (err) {
-      toastError('Unable to save task.')
-    }
+  const onSubmit = (formData) => {
+    saveTaskMutator.mutate(formData)
   }
 
-  const handleToggle = async (taskId) => {
-    try {
-      const task = tasks.find((item) => item.id === taskId)
-      if (!task) return
-      const updated = await updateTask(taskId, {
-        title: task.title,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        completed: !task.completed
-      })
-      setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-    } catch (err) {
-      toastError('Unable to update task status.')
-    }
+  const handleToggle = (task) => {
+    const isNowCompleted = !task.completed
+    toggleTaskMutator.mutate({
+      id: task.id,
+      payload: { completed: isNowCompleted }
+    })
   }
 
-  const handleDelete = async (taskId) => {
-    try {
-      await deleteTask(taskId)
-      setTasks((prev) => prev.filter((task) => task.id !== taskId))
-      toastSuccess('Task deleted successfully.')
-    } catch (err) {
-      toastError('Unable to delete task.')
-    }
+  const handleDelete = (id) => {
+    deleteTaskMutator.mutate(id)
   }
+
+  // Derived filter/ordering fallbacks
+  const displayedTasks = filteredTasks.length > 0 ? filteredTasks : []
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -585,18 +581,18 @@ export default function Tasks() {
               </div>
             </div>
             <div className="p-6">
-              <form className="space-y-4" onSubmit={handleSubmit}>
+              <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Task Title</label>
                   <input
                     type="text"
                     maxLength={500}
-                    value={form.title}
-                    onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+                    {...register('title')}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
                     placeholder="Enter task description..."
                     required
                   />
+                  {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title.message}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
@@ -607,7 +603,7 @@ export default function Tasks() {
                       onClick={() => setPriorityOpen((prev) => !prev)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm text-left flex items-center justify-between bg-white"
                     >
-                      <span>{priorityOptions.find((option) => option.value === form.priority)?.label}</span>
+                      <span>{priorityOptions.find((option) => option.value === currentPriority)?.label}</span>
                       <i className="ri-arrow-down-s-line text-gray-400"></i>
                     </button>
                     {priorityOpen && (
@@ -620,7 +616,7 @@ export default function Tasks() {
                             key={option.value}
                             type="button"
                             onClick={() => {
-                              setForm((prev) => ({ ...prev, priority: option.value }))
+                              setValue('priority', option.value)
                               setPriorityOpen(false)
                             }}
                             className="w-full px-3 py-2 text-left hover:bg-gray-50 text-sm"
@@ -636,8 +632,7 @@ export default function Tasks() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
                   <input
                     type="date"
-                    value={form.dueDate}
-                    onChange={(event) => setForm((prev) => ({ ...prev, dueDate: event.target.value }))}
+                    {...register('dueDate')}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"
                   />
                 </div>

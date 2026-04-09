@@ -4,6 +4,8 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import toast from '../services/toastService'
 import supplierService from '../services/supplierService'
+import { cn } from '../utils/cn'
+import { Search, ArrowUpDown, ChevronLeft, ChevronRight, Download, ArrowLeft, Filter } from 'lucide-react'
 
 function formatCurrency(v) {
   if (v == null) return ''
@@ -79,48 +81,60 @@ export default function SupplierProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50/50 pt-20 pb-20 md:pb-0">
       <Header />
       <div className="flex">
         <Sidebar />
-        <main className="flex-1 p-6 md:p-8 md:ml-64">
+        <main className="flex-1 p-6 md:p-8 md:ml-64 w-full transition-all duration-300">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-3 md:mb-4">
-              <Link to="/suppliers" className="flex items-center gap-2 text-gray-600 hover:text-primary transition-colors">
-                <div className="w-5 h-5 flex items-center justify-center"><i className="ri-arrow-left-line"></i></div>
+              <Link to="/suppliers" className="flex items-center gap-2 text-gray-500 hover:text-primary transition-colors font-medium">
+                <ArrowLeft size={16} />
                 <span className="text-sm">Back to Suppliers</span>
               </Link>
             </div>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
               <div>
-                <h2 className="text-xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2">{loadingSupplier ? 'Loading...' : (supplier?.name || 'Supplier not found')}</h2>
-                <p className="text-gray-600 text-sm md:text-base">Supplier details and transaction history</p>
+                <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 border-b-2 border-primary inline-block pb-1">{loadingSupplier ? 'Loading...' : (supplier?.name || 'Supplier not found')}</h2>
+                <p className="text-gray-500 text-sm mt-2">Supplier details and transaction history</p>
               </div>
             </div>
           </div>
 
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-              <div className="flex flex-row gap-2 sm:gap-3 items-center">
-                <div className="relative flex-1">
-                  <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search transactions..." className="pl-3 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-full" />
+          <div className="bg-white border text-sm md:text-base border-gray-200 rounded-2xl shadow-sm mb-8 overflow-hidden">
+            <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between bg-gray-50/30">
+              <div className="relative w-full md:w-96 group flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Search className="text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
                 </div>
+                <input
+                  value={searchQuery}
+                  onChange={e=>setSearchQuery(e.target.value)}
+                  placeholder="Search transactions..."
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                />
+              </div>
+
+              <div className="relative flex items-center gap-3 w-full md:w-auto">
+                <button
+                  onClick={(e)=>{ e.stopPropagation(); setFilterOpen(v=>!v); setSortOpen(false)}}
+                  className="w-full md:w-auto px-4 py-2 border border-gray-200 bg-white rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Filter size={16} />
+                  <span className="hidden sm:inline">All</span>
+                </button>
 
                 <div className="relative">
-                  <button onClick={(e)=>{ e.stopPropagation(); setFilterOpen(v=>!v); setSortOpen(false)}} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button">
-                    <div className="flex items-center gap-2"><i className="ri-filter-3-line"></i><span className="hidden sm:inline">All</span></div>
-                  </button>
-                </div>
-
-                <div className="relative sm:flex-initial">
-                  <button onClick={(e)=>{ e.stopPropagation(); setSortOpen(v=>!v); setFilterOpen(false)}} className="w-full sm:w-auto flex items-center justify-center gap-2 px-2 md:px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap !rounded-button">
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-sort-desc"></i></div>
-                    <span className="hidden xs:inline sm:inline">Sort</span>
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-down-s-line"></i></div>
+                  <button
+                    onClick={(e)=>{ e.stopPropagation(); setSortOpen(v=>!v); setFilterOpen(false)}}
+                    className="w-full md:w-auto px-4 py-2 border border-gray-200 bg-white rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <ArrowUpDown size={16} />
+                    <span className="hidden sm:inline">Sort</span>
                   </button>
                   {sortOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                      <div className="p-2">
+                    <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                      <div className="py-2 max-h-64 overflow-y-auto">
                         {[
                           { "k": "date", "l": "Date (oldest first)" },
                           { "k": "-date", "l": "Date (newest first)" },
@@ -135,120 +149,140 @@ export default function SupplierProfile() {
                           { "k": "item__code", "l": "Item Code (A → Z)" },
                           { "k": "-item__code", "l": "Item Code (Z → A)" }
                         ].map(s => (
-                          <button key={s.k} onClick={(ev)=>{ ev.stopPropagation(); setOrdering(s.k); setSortOpen(false)}} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">{s.l}</button>
+                          <button
+                            key={s.k}
+                            onClick={(ev)=>{ ev.stopPropagation(); setOrdering(s.k); setSortOpen(false)}}
+                            className={cn("w-full text-left px-4 py-2 text-sm transition-colors", ordering === s.k ? "bg-primary/5 text-primary font-medium" : "text-gray-700 hover:bg-gray-50")}
+                          >
+                            {s.l}
+                          </button>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div className="relative">
-                <button onClick={(e)=>{ e.stopPropagation(); setExportOpen(v=>!v); setSortOpen(false); setFilterOpen(false)}} className="flex-1 md:flex-initial px-3 md:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap !rounded-button text-sm">
-                  <div className="flex items-center gap-2 justify-center"><div className="w-4 h-4 flex items-center justify-center"><i className="ri-download-line"></i></div><span>Export</span></div>
-                </button>
-                {exportOpen && (
-                  <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    <div className="p-2">
-                      <button onClick={(ev)=>{ ev.stopPropagation(); downloadExport('csv') }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">Export CSV</button>
-                      <button onClick={(ev)=>{ ev.stopPropagation(); downloadExport('pdf') }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">Export PDF</button>
+                <div className="relative">
+                  <button
+                    onClick={(e)=>{ e.stopPropagation(); setExportOpen(v=>!v); setSortOpen(false); setFilterOpen(false)}}
+                    className="w-full md:w-auto px-5 py-2 !rounded-button bg-primary text-white font-medium hover:bg-primary/95 transition-colors shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Download size={18} />
+                    <span>Export</span>
+                  </button>
+                  {exportOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                      <div className="py-2">
+                        <button onClick={(ev)=>{ ev.stopPropagation(); downloadExport('csv') }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Export CSV</button>
+                        <button onClick={(ev)=>{ ev.stopPropagation(); downloadExport('pdf') }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Export PDF</button>
+                      </div>
                     </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 md:p-5">
+              <h3 className="text-lg md:text-xl font-bold tracking-tight text-gray-900 mb-4 border-b pb-2 inline-block border-gray-200">Transaction History</h3>
+
+              <div className="hidden md:block">
+                {loading ? (
+                  <div className="p-8 text-center text-gray-500">Loading transactions...</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50">
+                        <tr className="text-xs font-semibold text-gray-500 uppercase">
+                          <th className="py-3 px-4 border-b border-gray-200">Date</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Product Code</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Units</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Unit Price</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Payable</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Payment Sent</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Bank</th>
+                          <th className="py-3 px-4 border-b border-gray-200">Remain</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {transactions.length === 0 ? (
+                          <tr><td colSpan={8} className="p-8 text-center text-gray-500">No transactions found.</td></tr>
+                        ) : (
+                          transactions.map((t, i) => (
+                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                              <td className="py-3 px-4 text-sm font-semibold text-gray-600">{t.date}</td>
+                              <td className="py-3 px-4 text-sm font-medium text-gray-900">{t.product_code}</td>
+                              <td className="py-3 px-4 text-sm text-gray-900">{t.units}</td>
+                              <td className="py-3 px-4 text-sm font-medium text-gray-900">{t.unit_price != null ? formatCurrency(t.unit_price) : ''}</td>
+                              <td className="py-3 px-4 text-sm font-medium text-gray-900">{t.payable != null ? formatCurrency(t.payable) : ''}</td>
+                              <td className={`py-3 px-4 text-sm font-semibold ${t.payment_sent && Number(t.payment_sent) > 0 ? 'text-green-600' : 'text-gray-900'}`}>{t.payment_sent}</td>
+                              <td className="py-3 px-4 text-sm text-gray-900">{t.bank}</td>
+                              <td className={`py-3 px-4 text-sm font-semibold ${Number(t.remain) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{t.remain != null ? formatCurrency(t.remain) : ''}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          <div className="mb-8">
-            <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 md:mb-6">Transaction History</h3>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 md:p-6 mb-8 hidden md:block">
-              {loading ? (
-                <div className="p-6 text-center text-gray-500">Loading transactions...</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Product Code</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Units</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Unit Price</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Payable</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Payment Sent</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Bank</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-900">Remain</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {transactions.length === 0 ? (
-                        <tr><td colSpan={8} className="p-6 text-center text-gray-500">No transactions found.</td></tr>
-                      ) : (
-                        transactions.map((t, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 px-4 text-sm font-bold text-gray-600">{t.date}</td>
-                            <td className="py-3 px-4 text-sm font-medium text-gray-900">{t.product_code}</td>
-                            <td className="py-3 px-4 text-sm text-gray-900">{t.units}</td>
-                            <td className="py-3 px-4 text-sm font-semibold text-gray-900">{t.unit_price != null ? formatCurrency(t.unit_price) : ''}</td>
-                            <td className="py-3 px-4 text-sm font-semibold text-gray-900">{t.payable != null ? formatCurrency(t.payable) : ''}</td>
-                            <td className={`py-3 px-4 text-sm font-semibold ${t.payment_sent && Number(t.payment_sent) > 0 ? 'text-green-600' : 'text-gray-900'}`}>{t.payment_sent}</td>
-                            <td className="py-3 px-4 text-sm text-gray-900">{t.bank}</td>
-                            <td className={`py-3 px-4 text-sm font-semibold ${Number(t.remain) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{t.remain != null ? formatCurrency(t.remain) : ''}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="md:hidden space-y-4">
+                {loading ? (
+                  <div className="p-6 text-center text-gray-500">Loading transactions...</div>
+                ) : transactions.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">No transactions found.</div>
+                ) : (
+                  transactions.map((t, i) => (
+                    <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="text-xs font-bold text-gray-500 mb-1">{t.date}</div>
+                          <div className="text-sm font-semibold text-gray-900">{t.product_code}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500 mb-1 font-medium">Remain</div>
+                          <div className={`text-sm font-bold ${Number(t.remain) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{t.remain != null ? formatCurrency(t.remain) : ''}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+                        <div><span className="text-gray-500 block mb-0.5 font-medium">Units</span><span className="text-gray-900 font-semibold">{t.units}</span></div>
+                        <div><span className="text-gray-500 block mb-0.5 font-medium">Price</span><span className="text-gray-900 font-semibold">{t.unit_price != null ? formatCurrency(t.unit_price) : ''}</span></div>
+                        <div><span className="text-gray-500 block mb-0.5 font-medium">Payable</span><span className="text-gray-900 font-semibold">{t.payable != null ? formatCurrency(t.payable) : ''}</span></div>
+                        <div><span className="text-gray-500 block mb-0.5 font-medium">Sent</span><span className="text-green-600 font-bold">{t.payment_sent}</span></div>
+                      </div>
+                      <div className="mt-3 pt-2 text-right"><span className="text-xs text-gray-400 font-medium">Bank:</span><span className="text-xs font-semibold text-gray-900 ml-1">{t.bank}</span></div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
-            <div className="md:hidden space-y-4 mt-4">
-              {loading ? (
-                <div className="p-4 text-center text-gray-500">Loading transactions...</div>
-              ) : transactions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No transactions found.</div>
-              ) : (
-                transactions.map((t, i) => (
-                  <div key={i} className="border border-gray-100 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="text-xs font-bold text-gray-500 mb-1">{t.date}</div>
-                        <div className="text-sm font-medium text-gray-900">{t.product_code}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-gray-500 mb-1">Remain</div>
-                        <div className={`text-sm font-semibold ${Number(t.remain) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{t.remain != null ? formatCurrency(t.remain) : ''}</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div><span className="text-gray-500">Units:</span><span className="text-gray-900 ml-1">{t.units}</span></div>
-                      <div><span className="text-gray-500">Unit Price:</span><span className="text-gray-900 ml-1">{t.unit_price != null ? formatCurrency(t.unit_price) : ''}</span></div>
-                      <div><span className="text-gray-500">Payable:</span><span className="text-gray-900 ml-1">{t.payable != null ? formatCurrency(t.payable) : ''}</span></div>
-                      <div><span className="text-gray-500">Payment Sent:</span><span className={`ml-1 ${t.payment_sent && Number(t.payment_sent) > 0 ? 'text-green-600' : 'text-gray-900'}`}>{t.payment_sent}</span></div>
-                    </div>
-                    <div className="mt-2 pt-2 border-t border-gray-200"><span className="text-xs text-gray-500">Bank:</span><span className="text-xs text-gray-900 ml-1">{t.bank}</span></div>
+            {(() => {
+              const hasMeta = Boolean(txMeta && txMeta.count)
+              const showPagination = Boolean(txMeta && txMeta.previous) || Boolean(txMeta && txMeta.next) || (hasMeta && txMeta.pageSize && txMeta.count > txMeta.pageSize)
+              if (!showPagination) return null
+              return (
+                <div className="flex items-center justify-between p-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500">
+                    Page {txPage} {txMeta && txMeta.count ? ' of ' + Math.max(1, Math.ceil(txMeta.count / (txMeta.pageSize || 1))) : ''}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center mt-8">
-            <div className="flex items-center gap-2">
-              <button onClick={() => { if (!(txMeta && txMeta.previous)) return; setTxPage(p => Math.max(1, p - 1)) }}
-                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button"
-                      disabled={!(txMeta && txMeta.previous)}>
-                <i className="ri-arrow-left-s-line"></i>
-                <span className="ml-1">Previous</span>
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-600">Page {txPage}{txMeta && txMeta.count ? ' of ' + Math.max(1, Math.ceil(txMeta.count / (txMeta.pageSize || 1))) : ''}</span>
-              <button onClick={() => { if (!(txMeta && txMeta.next)) return; setTxPage(p => p + 1) }}
-                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button"
-                      disabled={ !(txMeta && txMeta.next)}>
-                <span className="mr-1">Next </span>
-                <i className="ri-arrow-right-s-line"></i>
-              </button>
-            </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { if (!(txMeta && txMeta.previous)) return; setTxPage(p => Math.max(1, p - 1)) }}
+                            className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                            disabled={!(txMeta && txMeta.previous)} aria-disabled={!(txMeta && txMeta.previous)}>
+                      <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:block">Previous</span>
+                    </button>
+                    <button onClick={() => { if (!(txMeta && txMeta.next)) return; setTxPage(p => p + 1) }}
+                            className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                            disabled={!(txMeta && txMeta.next)} aria-disabled={!(txMeta && txMeta.next)}>
+                      <span className="hidden sm:block">Next</span>
+                      <ChevronRight className="w-4 h-4 sm:ml-1" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </main>
       </div>

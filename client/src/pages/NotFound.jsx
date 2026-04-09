@@ -9,7 +9,7 @@ export default function NotFound() {
       <div className="w-full max-w-lg">
         <div className="bg-white/90 backdrop-blur border border-gray-100 shadow-2xl rounded-2xl p-8 md:p-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 mb-4">
-            <img src="/logo.png" alt="HabsifyLogo" className="w-12 h-12" />
+            <img src="../../public/logo.png" alt="HabsifyLogo" className="w-12 h-12" />
           </div>
           <p className="text-sm text-gray-500 mb-2">Error 404</p>
           <h1 className="text-3xl font-['Roboto'] font-black text-primary mb-3">Page not found</h1>

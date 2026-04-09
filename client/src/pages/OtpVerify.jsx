@@ -57,7 +57,7 @@ export default function OtpVerify() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-24 h-24 mb-2">
-            <img src="/logo.png" alt="HabsifyLogo" />
+            <img src="../../public/logo.png" alt="HabsifyLogo" />
           </div>
           <h1 className="text-3xl font-['Roboto'] font-black text-primary mb-2">Verify OTP</h1>
           <p className="text-gray-600 text-lg">Enter the code sent to your email/phone.</p>

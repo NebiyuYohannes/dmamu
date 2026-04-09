@@ -3,126 +3,185 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import InventoryTabs from '../components/InventoryTabs'
 import toast from '../services/toastService'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '../utils/cn'
+import { Search, ArrowUpDown, ChevronLeft, ChevronRight, Edit2, Trash2, Plus, ArrowUpRight, ArrowDownRight, Package, X, Anchor } from 'lucide-react'
+import { getStockMovements, getStockMovementDetail, createStockMovement, updateStockMovement, deleteStockMovement, getInventoryDropdown, getPurchaseDropdown, getSaleDropdown } from '../services/inventoryService'
 
 function formatDate(value) {
   if (!value) return ''
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
-  return d.toLocaleString()
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: 'numeric'
+  })
 }
 
-function movementTypeClass(type) {
-  if (type === 'purchase') return 'text-green-600 bg-green-50 border-green-200'
-  if (type === 'sale') return 'text-red-600 bg-red-50 border-red-200'
-  if (type === 'adjustment') return 'text-blue-600 bg-blue-50 border-blue-200'
-  return 'text-gray-700 bg-gray-50 border-gray-200'
-}
+// PHASE 40: Zod definitions protecting financial inventory hooks
+const movementSchema = z.object({
+  inventory: z.string().min(1, 'Inventory selection is required'),
+  movement_type: z.enum(['purchase', 'sale', 'adjustment']),
+  quantity: z.number().min(1, 'Quantity must be at least 1').or(z.number().max(-1, 'Quantity cannot be zero')),
+  notes: z.string().optional(),
+  purchase: z.string().optional(),
+  sale: z.string().optional()
+})
+
+const sortOptions = [
+  { k: '-date', l: 'Date (newest first)' },
+  { k: 'date', l: 'Date (oldest first)' },
+  { k: 'quantity', l: 'Quantity (low → high)' },
+  { k: '-quantity', l: 'Quantity (high → low)' },
+  { k: 'item_name', l: 'Item Name (A → Z)' },
+  { k: '-item_name', l: 'Item Name (Z → A)' }
+]
 
 export default function InventoryStockMovements() {
-  const [movements, setMovements] = useState([])
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [ordering, setOrdering] = useState('-date')
+
   const [sortOpen, setSortOpen] = useState(false)
-  const [page, setPage] = useState(1)
-  const [meta, setMeta] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [editingMovement, setEditingMovement] = useState(null)
   const [detailMovement, setDetailMovement] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
   const [inventorySearch, setInventorySearch] = useState('')
-  const [inventoryOptions, setInventoryOptions] = useState([])
-  const [selectedInventory, setSelectedInventory] = useState(null)
-  const [purchaseOptions, setPurchaseOptions] = useState([])
-  const [saleOptions, setSaleOptions] = useState([])
+  const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('')
 
-  function handleInventorySelect(value) {
-    const found = inventoryOptions.find(opt => String(opt.id) === String(value)) || null
-    setSelectedInventory(found)
-  }
+  const { register, handleSubmit, reset, formState: { errors }, watch, setValue } = useForm({
+    resolver: zodResolver(movementSchema),
+    defaultValues: { movement_type: 'adjustment', quantity: '', notes: '', inventory: '', purchase: '', sale: '' }
+  })
 
+  const watchInventory = watch('inventory')
+
+  // Debouncing main & dropdown search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
     return () => clearTimeout(t)
   }, [search])
 
   useEffect(() => {
-    setPage(1)
-  }, [debouncedSearch, ordering])
-
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        setLoading(true)
-        const svc = await import('../services/inventoryService')
-        const res = await svc.getStockMovements({ page, search: debouncedSearch, ordering })
-        const data = res?.data ?? res
-        const list = Array.isArray(data) ? data : (data?.results ?? [])
-        if (!mounted) return
-        setMovements(list)
-        if (data && !Array.isArray(data)) {
-          setMeta({ count: data.count, next: data.next, previous: data.previous, pageSize: (data.results || []).length })
-        } else {
-          setMeta({ count: list.length, next: null, previous: null, pageSize: list.length })
-        }
-      } catch (err) {
-        toast.error('Failed to load stock movements')
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => { mounted = false }
-  }, [debouncedSearch, ordering, page])
-
-  useEffect(() => {
-    let mounted = true
-    const t = setTimeout(async () => {
-      try {
-        const svc = await import('../services/inventoryService')
-        const res = await svc.getInventoryDropdown({ search: inventorySearch.trim() })
-        const data = res?.data ?? res
-        if (!mounted) return
-        setInventoryOptions(Array.isArray(data) ? data : (data?.results ?? []))
-      } catch (err) {
-        if (mounted) setInventoryOptions([])
-      }
-    }, 300)
-    return () => { mounted = false; clearTimeout(t) }
+    const t = setTimeout(() => setDebouncedInventorySearch(inventorySearch.trim()), 300)
+    return () => clearTimeout(t)
   }, [inventorySearch])
 
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const svc = await import('../services/inventoryService')
-        const [pRes, sRes] = await Promise.all([
-          svc.getPurchaseDropdown(),
-          svc.getSaleDropdown()
-        ])
-        if (!mounted) return
-        setPurchaseOptions(pRes?.data ?? pRes ?? [])
-        setSaleOptions(sRes?.data ?? sRes ?? [])
-      } catch (err) {
-        if (mounted) {
-          setPurchaseOptions([])
-          setSaleOptions([])
-        }
-      }
-    })()
-    return () => { mounted = false }
+    setPage(1)
+  }, [debouncedSearch, ordering])
+
+  // Click outside listener for dropdowns
+  useEffect(() => {
+    function onDoc() { setSortOpen(false) }
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
   }, [])
 
+  // PHASE 41: Replace all sequential backend loads with strict queries
+  // Metadata Caches (Inventory Options / Purchases / Sales)
+  const { data: inventoryOptionsRaw } = useQuery({
+    queryKey: ['inventoryDropdown', debouncedInventorySearch],
+    queryFn: async () => {
+      const res = await getInventoryDropdown({ search: debouncedInventorySearch })
+      return Array.isArray(res?.data) ? res.data : (res?.data?.results || res || [])
+    },
+    staleTime: 30 * 1000
+  })
+  const inventoryOptions = Array.isArray(inventoryOptionsRaw) ? inventoryOptionsRaw : []
+
+  const { data: metadata } = useQuery({
+    queryKey: ['movementsMetadata'],
+    queryFn: async () => {
+      const [pRes, sRes] = await Promise.all([getPurchaseDropdown(), getSaleDropdown()])
+      return {
+        purchases: pRes?.data ?? pRes ?? [],
+        sales: sRes?.data ?? sRes ?? []
+      }
+    },
+    staleTime: 5 * 60 * 1000
+  })
+
+  // Core Movements Data
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['stockMovements', page, debouncedSearch, ordering],
+    queryFn: async () => {
+      const res = await getStockMovements({ page, search: debouncedSearch, ordering })
+      return res?.data ?? res ?? {}
+    },
+    keepPreviousData: true,
+    staleTime: 30 * 1000
+  })
+
+  const count = data?.count ?? 0
+  const nextPageUrl = data?.next ?? null
+  const prevPageUrl = data?.previous ?? null
+
+  const rawItems = Array.isArray(data) ? data : (data?.results ?? [])
+  const pageSize = data?.page_size ?? data?.pageSize ?? (rawItems.length || 0)
+
+  // Creation Mutation mapped natively out of legacy arrays
+  const createMutator = useMutation({
+    mutationFn: async (payload) => {
+      const submitData = {
+        ...payload,
+        inventory: Number(payload.inventory),
+        purchase: payload.purchase ? Number(payload.purchase) : null,
+        sale: payload.sale ? Number(payload.sale) : null
+      }
+      return createStockMovement(submitData)
+    },
+    onMutate: async (newMovement) => {
+      await queryClient.cancelQueries({ queryKey: ['stockMovements'] })
+      const previous = queryClient.getQueryData(['stockMovements', page, debouncedSearch, ordering])
+      const tempId = `temp-${Date.now()}`
+
+      // Look up visual data
+      const selected = inventoryOptions.find(opt => String(opt.id) === String(newMovement.inventory))
+
+      queryClient.setQueryData(['stockMovements', page, debouncedSearch, ordering], (old) => {
+        if (!old) return old
+        const updatedList = [{
+          id: tempId,
+          movement_type: newMovement.movement_type,
+          item_name: selected?.item_name || '',
+          warehouse_name: selected?.warehouse_name || '',
+          reference: selected?.reference || '',
+          quantity: newMovement.quantity,
+          date: new Date().toISOString(),
+          isOptimistic: true
+        }, ...(old.results || old)]
+        return { ...old, results: updatedList }
+      })
+      return { previous }
+    },
+    onSuccess: () => {
+      toast.success('Movement recorded successfully')
+      queryClient.invalidateQueries({ queryKey: ['stockMovements'] })
+      closeModal()
+    },
+    onError: (err, newMovement, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['stockMovements', page, debouncedSearch, ordering], context.previous)
+      }
+      toast.error('Failed to create movement')
+    }
+  })
+
+  // Handlers
   async function openDetail(movement) {
     setDetailOpen(true)
     setDetailLoading(true)
     try {
-      const svc = await import('../services/inventoryService')
-      const res = await svc.getStockMovementDetail(movement.id)
+      const res = await getStockMovementDetail(movement.id)
       setDetailMovement(res?.data ?? res)
     } catch (err) {
       toast.error('Failed to load movement detail')
@@ -131,235 +190,125 @@ export default function InventoryStockMovements() {
     }
   }
 
-  function openEdit(movement) {
-    setEditingMovement(movement)
-    setEditModalOpen(true)
+  function closeModal() {
+    setIsModalOpen(false)
+    reset()
     setInventorySearch('')
   }
 
-  async function handleDelete(movement) {
-    const confirmed = window.confirm('If you delete this movement you will lose all related records')
-    if (!confirmed) return
-    try {
-      toast.info('Deleting movement...')
-      const svc = await import('../services/inventoryService')
-      await svc.deleteStockMovement(movement.id)
-      setMovements(prev => prev.filter(m => m.id !== movement.id))
-      toast.success('Movement deleted')
-    } catch (err) {
-      toast.error('Failed to delete movement')
-    }
+  function onSubmit(formData) {
+    createMutator.mutate(formData)
   }
 
-  async function handleCreate(e) {
-    e.preventDefault()
-    const fd = new FormData(e.target)
-    const inventory = (fd.get('movementInventory') || '').toString().trim()
-    const movementType = (fd.get('movementType') || '').toString().trim()
-    const quantity = (fd.get('movementQuantity') || '').toString().trim()
-    const notes = (fd.get('movementNotes') || '').toString().trim()
-    const purchase = (fd.get('movementPurchase') || '').toString().trim()
-    const sale = (fd.get('movementSale') || '').toString().trim()
-
-    if (!inventory || !movementType || !quantity) {
-      toast.error('Inventory, movement type, and quantity are required')
-      return
-    }
-
-    const payload = {
-      inventory: Number(inventory),
-      movement_type: movementType,
-      quantity: Number(quantity),
-      notes: notes || '',
-      purchase: purchase ? Number(purchase) : null,
-      sale: sale ? Number(sale) : null
-    }
-
-    const selected = selectedInventory || inventoryOptions.find(opt => String(opt.id) === String(inventory))
-    const optimisticItem = selected?.item_name || ''
-    const optimisticWarehouse = selected?.warehouse_name || ''
-    const reference = selected?.reference || ''
-
-    const tempId = `temp-${Date.now()}`
-    const optimistic = {
-      id: tempId,
-      movement_type: movementType,
-      item_name: optimisticItem,
-      warehouse_name: optimisticWarehouse,
-      reference,
-      quantity: Number(quantity),
-      date: new Date().toISOString(),
-      optimistic: true
-    }
-
-    setMovements(prev => [optimistic, ...prev])
-    setIsModalOpen(false)
-    e.target.reset()
-
-    try {
-      toast.info('Creating movement...')
-      const svc = await import('../services/inventoryService')
-      const res = await svc.createStockMovement(payload)
-      const created = res?.data ?? res
-      setMovements(prev => prev.map(m => (m.id === tempId ? created : m)))
-      toast.success('Movement created')
-    } catch (err) {
-      setMovements(prev => prev.filter(m => m.id !== tempId))
-      toast.error('Failed to create movement')
-      setIsModalOpen(true)
-    }
-  }
-
-  async function handleEditSubmit(e) {
-    e.preventDefault()
-    if (!editingMovement) return
-    const fd = new FormData(e.target)
-    const inventory = (fd.get('editMovementInventory') || '').toString().trim()
-    const movementType = (fd.get('editMovementType') || '').toString().trim()
-    const quantity = (fd.get('editMovementQuantity') || '').toString().trim()
-    const notes = (fd.get('editMovementNotes') || '').toString().trim()
-    const purchase = (fd.get('editMovementPurchase') || '').toString().trim()
-    const sale = (fd.get('editMovementSale') || '').toString().trim()
-
-    if (!inventory || !movementType || !quantity) {
-      toast.error('Inventory, movement type, and quantity are required')
-      return
-    }
-
-    const payload = {
-      inventory: Number(inventory),
-      movement_type: movementType,
-      quantity: Number(quantity),
-      notes: notes || '',
-      purchase: purchase ? Number(purchase) : null,
-      sale: sale ? Number(sale) : null
-    }
-
-    const prev = movements.find(m => m.id === editingMovement.id)
-    if (!prev) return
-    const optimistic = { ...prev, ...payload }
-    setMovements(prevList => prevList.map(m => (m.id === optimistic.id ? optimistic : m)))
-    setEditModalOpen(false)
-    setEditingMovement(null)
-
-    try {
-      toast.info('Updating movement...')
-      const svc = await import('../services/inventoryService')
-      const res = await svc.updateStockMovement(optimistic.id, payload)
-      const updated = res?.data ?? res
-      setMovements(prevList => prevList.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))
-      toast.success('Movement updated')
-    } catch (err) {
-      setMovements(prevList => prevList.map(m => (m.id === prev.id ? prev : m)))
-      toast.error('Failed to update movement')
-      setEditingMovement(prev)
-      setEditModalOpen(true)
-    }
-  }
-
-  const filtered = useMemo(() => movements.slice(), [movements])
+  const filtered = useMemo(() => rawItems.slice(), [rawItems])
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-20 md:pb-0">
+    <div className="min-h-screen bg-gray-50/50 pt-20 pb-20 md:pb-0">
       <Header />
       <div className="flex">
         <Sidebar />
-        <main className="flex-1 p-6 md:p-8 md:ml-64">
+        <main className="flex-1 p-6 md:p-8 md:ml-64 w-full transition-all duration-300">
           <div className="mb-8">
-            <h2 className="text-xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2">Stock Movements</h2>
-            <p className="text-sm md:text-base text-gray-600">Track stock in, stock out, and transfers.</p>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 border-b-2 border-primary inline-block pb-1">Stock Ledgers</h2>
+            <p className="text-gray-500 text-sm mt-2">Audit all stock interactions including inbound purchases, local adjustments and outbound sales.</p>
           </div>
 
           <div className="mb-6">
             <InventoryTabs />
           </div>
 
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-              <div className="flex flex-row gap-2 sm:gap-3 items-center">
-                <div className="relative flex-1">
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search movements..." className="pl-3 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-full" />
+          <div className="bg-white border text-sm md:text-base border-gray-200 rounded-2xl shadow-sm mb-8 overflow-hidden">
+            <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between bg-gray-50/30">
+
+              <div className="relative w-full md:w-96 group flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Search className="text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
                 </div>
-                <div className="relative sm:flex-initial">
-                  <button onClick={(e) => { e.stopPropagation(); setSortOpen(v => !v) }} className="w-full sm:w-auto flex items-center justify-center gap-2 px-2 md:px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap !rounded-button">
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-sort-desc"></i></div>
-                    <span className="hidden sm:inline">Sort</span>
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-down-s-line"></i></div>
-                  </button>
-                  {sortOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                      <div className="p-2">
-                        {[
-                          { k: '-date', l: 'Date (newest first)' },
-                          { k: 'date', l: 'Date (oldest first)' },
-                          { k: 'movement_type', l: 'Type (A → Z)' },
-                          { k: '-movement_type', l: 'Type (Z → A)' },
-                          { k: 'quantity', l: 'Quantity (low → high)' },
-                          { k: '-quantity', l: 'Quantity (high → low)' }
-                        ].map(opt => (
-                          <button key={opt.k} onClick={(ev) => { ev.stopPropagation(); setOrdering(opt.k); setSortOpen(false) }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">
-                            {opt.l}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search item or reference..."
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                />
               </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => { setIsModalOpen(true); setInventorySearch('') }} className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm">Add Movement</button>
+
+              <div className="relative flex items-center gap-3 w-full md:w-auto">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSortOpen(v => !v) }}
+                  className="w-full md:w-auto px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+                >
+                  <ArrowUpDown size={16} />
+                  <span>Sort Records</span>
+                </button>
+                {sortOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                    <div className="py-2">
+                       {sortOptions.map(opt => (
+                        <button
+                          key={opt.k}
+                          onClick={(ev) => { ev.stopPropagation(); setOrdering(opt.k); setSortOpen(false) }}
+                          className={cn("w-full text-left px-4 py-2 text-sm transition-colors", ordering === opt.k ? "bg-primary/5 text-primary font-medium" : "text-gray-700 hover:bg-gray-50")}
+                        >
+                          {opt.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="w-full md:w-auto px-5 py-2 !rounded-button bg-primary text-white font-medium hover:bg-primary/95 transition-colors shadow-sm flex items-center justify-center gap-2"
+                >
+                  <Plus size={18} />
+                  Add Legder
+                </button>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 md:p-6 mb-8 hidden md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Item</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Warehouse</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Reference</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
+            {/* Desktop Table View */}
+            <div className="p-4 md:p-5 hidden md:block">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50">
+                  <tr className="text-xs font-semibold text-gray-500 uppercase border-b border-gray-200">
+                    <th className="py-3 px-4">Item Target</th>
+                    <th className="py-3 px-4">Node Location</th>
+                    <th className="py-3 px-4">Movement Type</th>
+                    <th className="py-3 px-4">Offset</th>
+                    <th className="py-3 px-4">Timestamp</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={7} className="p-6 text-center text-gray-500">Loading movements...</td></tr>
+                    <tr><td colSpan={5} className="p-8 text-center text-gray-500">Loading ledgers...</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={7} className="p-6 text-center text-gray-500">No movements found.</td></tr>
+                    <tr><td colSpan={5} className="p-8 text-center text-gray-500">No ledgers found.</td></tr>
                   ) : (
-                    filtered.map(m => (
-                      <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4"><p className="text-sm text-gray-700">{formatDate(m.date)}</p></td>
+                    filtered.map((item) => (
+                      <tr key={item.id} onClick={(ev)=>{ ev.stopPropagation(); openDetail(item) }} className={cn("hover:bg-gray-50 transition-colors cursor-pointer group", item.isOptimistic ? "opacity-50" : "")}>
                         <td className="py-3 px-4">
-                          <p className={`text-sm font-medium ${m.movement_type === 'purchase' ? 'text-green-600' : m.movement_type === 'sale' ? 'text-red-600' : m.movement_type === 'adjustment' ? 'text-blue-600' : 'text-gray-700'}`}>
-                            {m.movement_type}
-                          </p>
+                          <span className="font-semibold text-gray-900 group-hover:text-primary transition-colors flex items-center gap-2">
+                             <Package className="text-primary/50 shrink-0" size={16} />
+                             {item.item_name}
+                          </span>
                         </td>
-                        <td className="py-3 px-4"><p className="text-sm text-gray-900">{m.item_name}</p></td>
-                        <td className="py-3 px-4"><p className="text-sm text-gray-700">{m.warehouse_name}</p></td>
-                        <td className="py-3 px-4"><p className="text-sm text-gray-700">{m.reference || ''}</p></td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{item.warehouse_name}</td>
                         <td className="py-3 px-4">
-                          <p className={`text-sm font-medium ${m.movement_type === 'purchase' ? 'text-green-600' : m.movement_type === 'sale' ? 'text-red-600' : m.movement_type === 'adjustment' ? 'text-blue-600' : 'text-gray-900'}`}>
-                            {m.quantity}
-                          </p>
+                          <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border",
+                            item.movement_type === 'purchase' ? 'text-green-700 bg-green-50 border-green-200' :
+                            item.movement_type === 'sale' ? 'text-red-700 bg-red-50 border-red-200' :
+                            'text-blue-700 bg-blue-50 border-blue-200'
+                          )}>
+                            {item.movement_type}
+                          </span>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <button onClick={(ev)=>{ ev.stopPropagation(); openDetail(m) }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors !rounded-button" title="View Movement">
-                              <div className="w-4 h-4 flex items-center justify-center"><i className="ri-eye-line"></i></div>
-                            </button>
-                            {/*<button onClick={(ev)=>{ ev.stopPropagation(); openEdit(m) }} className="p-1.5 text-gray-500 hover:text-yellow-600 hover:bg-yellow-50 rounded transition-colors !rounded-button" title="Edit Movement">*/}
-                            {/*  <div className="w-4 h-4 flex items-center justify-center"><i className="ri-edit-line"></i></div>*/}
-                            {/*</button>*/}
-                            {/*<button onClick={(ev)=>{ ev.stopPropagation(); handleDelete(m) }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors !rounded-button" title="Delete Movement">*/}
-                            {/*  <div className="w-4 h-4 flex items-center justify-center"><i className="ri-delete-bin-line"></i></div>*/}
-                            {/*</button>*/}
-                          </div>
+                          <span className={cn("font-medium text-gray-900 flex items-center gap-1", item.movement_type === 'purchase' || item.quantity > 0 ? "text-green-600" : "text-red-500")}>
+                             {item.quantity > 0 ? '+' : ''}{item.quantity}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-xs font-medium text-gray-400">
+                           {formatDate(item.date)}
                         </td>
                       </tr>
                     ))
@@ -367,259 +316,303 @@ export default function InventoryStockMovements() {
                 </tbody>
               </table>
             </div>
-          </div>
 
-          <div className="md:hidden space-y-4 mt-4">
-            {loading ? (
-              <div className="p-4 text-center text-gray-500">Loading movements...</div>
-            ) : filtered.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">No movements found.</div>
-            ) : (
-              filtered.map(m => (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-medium text-sm text-gray-900">{m.item_name}</h3>
-                      <p className="text-xs text-gray-500">{m.warehouse_name}</p>
+            {/* Mobile View */}
+            <div className="p-4 md:hidden space-y-4">
+              {loading ? (
+                <div className="p-6 text-center text-gray-500">Loading ledgers...</div>
+              ) : filtered.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">No ledgers found.</div>
+              ) : (
+                filtered.map((item) => (
+                  <div key={item.id} onClick={(ev)=>{ ev.stopPropagation(); openDetail(item) }} className={cn("bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer", item.isOptimistic ? "opacity-50" : "")}>
+                    <div className="flex items-start justify-between mb-2">
+                       <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                         <Package className="text-primary/50 shrink-0" size={14} />
+                         {item.item_name}
+                       </h3>
+                       <span className={cn("font-semibold text-lg", item.movement_type === 'purchase' || item.quantity > 0 ? "text-green-600" : "text-red-500")}>
+                         {item.quantity > 0 ? '+' : ''}{item.quantity}
+                       </span>
                     </div>
-                    <span className={`text-sm font-semibold ${m.movement_type === 'purchase' ? 'text-green-600' : m.movement_type === 'sale' ? 'text-red-600' : m.movement_type === 'adjustment' ? 'text-blue-600' : 'text-gray-900'}`}>
-                      {m.quantity}
-                    </span>
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-3 mt-3 font-medium">
+                      <span className="flex items-center gap-1"><Anchor size={12}/>{item.warehouse_name}</span>
+                      <span className={cn("px-2 py-0.5 rounded-full font-semibold border",
+                            item.movement_type === 'purchase' ? 'text-green-700 bg-green-50 border-green-200' :
+                            item.movement_type === 'sale' ? 'text-red-700 bg-red-50 border-red-200' :
+                            'text-blue-700 bg-blue-50 border-blue-200'
+                          )}>
+                        {item.movement_type}
+                      </span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div>Type: <span className={`${m.movement_type === 'purchase' ? 'text-green-600' : m.movement_type === 'sale' ? 'text-red-600' : m.movement_type === 'adjustment' ? 'text-blue-600' : 'text-gray-900'}`}>{m.movement_type}</span></div>
-                    <div>Ref: <span className="text-gray-900">{m.reference || ''}</span></div>
+                ))
+              )}
+            </div>
+
+            {/* Pagination Extracted Safely */}
+            {(() => {
+              const hasMeta = Boolean(count)
+              const showPagination = Boolean(prevPageUrl) || Boolean(nextPageUrl) || (hasMeta && pageSize && count > pageSize)
+              if (!showPagination) return null
+              return (
+                <div className="flex items-center justify-between p-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500 hidden sm:block">
+                     Page {page}{count ? ' of ' + Math.max(1, Math.ceil(count / (pageSize || 1))) : ''}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">{formatDate(m.date)}</div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <button onClick={(ev)=>{ ev.stopPropagation(); openDetail(m) }} className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50">
-                      <i className="ri-eye-line mr-1"></i>View
+                  <div className="flex gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!prevPageUrl) return
+                        try {
+                          const u = new URL(prevPageUrl, window.location.origin)
+                          const p = Number(u.searchParams.get('page') || 1)
+                          setPage(Number.isFinite(p) ? Math.max(1, p) : (page > 1 ? page - 1 : 1))
+                        } catch (e) {
+                          setPage(p => Math.max(1, p - 1))
+                        }
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                      disabled={!prevPageUrl}
+                    >
+                      <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:block">Previous</span>
                     </button>
-                    <button onClick={(ev)=>{ ev.stopPropagation(); openEdit(m) }} className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50">
-                      <i className="ri-edit-line mr-1"></i>Edit
-                    </button>
-                    <button onClick={(ev)=>{ ev.stopPropagation(); handleDelete(m) }} className="px-3 py-1.5 text-xs font-medium border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
-                      <i className="ri-delete-bin-line mr-1"></i>Delete
+
+                    <span className="text-sm text-gray-500 sm:hidden self-center">Page {page}</span>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!nextPageUrl) return
+                        try {
+                          const u = new URL(nextPageUrl, window.location.origin)
+                          const p = Number(u.searchParams.get('page') || 1)
+                          setPage(Number.isFinite(p) ? p : page + 1)
+                        } catch (e) {
+                          setPage(p => p + 1)
+                        }
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                      disabled={!nextPageUrl}
+                    >
+                      <span className="hidden sm:block">Next</span>
+                      <ChevronRight className="w-4 h-4 sm:ml-1" />
                     </button>
                   </div>
                 </div>
-              ))
+              )
+            })()}
+          </div>
+
+          {/* Phase 42: Creation Form with React Hook Form integrated natively onto Framer layer */}
+          <AnimatePresence>
+            {isModalOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 custom-scrollbar overflow-y-auto"
+              >
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                  transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+                  className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden my-8"
+                >
+                  <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xl font-bold tracking-tight text-gray-900">Process Ledger</h3>
+                        <p className="text-gray-500 text-sm mt-1">Audit and push a local offset to inventory stock node amounts.</p>
+                    </div>
+                    <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-600 bg-white rounded-full border shadow-sm transition-colors shrink-0">
+                      <X size={20}/>
+                    </button>
+                  </div>
+                  <form onSubmit={handleSubmit(onSubmit)} className="p-6 md:p-8 space-y-5">
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center justify-between">
+                        Inventory Object
+                        <div className="relative w-48">
+                          <input
+                            value={inventorySearch}
+                            onChange={(e) => setInventorySearch(e.target.value)}
+                            placeholder="Type to filter objects..."
+                            className="w-full pl-3 pr-2 py-1 border rounded text-xs font-normal focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                          />
+                        </div>
+                      </label>
+                      <select
+                        {...register('inventory')}
+                        className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white", errors.inventory ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                      >
+                         <option value="">-- Choose Stock Node --</option>
+                         {inventoryOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                      </select>
+                      {errors.inventory && <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.inventory.message}</p>}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Type</label>
+                          <select
+                            {...register('movement_type')}
+                            className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white border-gray-200 focus:border-primary")}
+                          >
+                             <option value="adjustment">Adjustment Cycle</option>
+                             <option value="purchase">Purchase Input</option>
+                             <option value="sale">Sale Output</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Quantity Variance</label>
+                          <input
+                            type="number" step="1"
+                            {...register('quantity', { valueAsNumber: true })}
+                            className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-gray-50", errors.quantity ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                            placeholder="+10 or -5"
+                          />
+                          {errors.quantity && <p className="mt-1.5 text-xs text-red-500 font-medium">{errors.quantity.message}</p>}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Link Commercial Sale <span className="font-normal text-gray-400 ml-1">(Optional)</span></label>
+                          <select
+                            {...register('sale')}
+                            className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white border-gray-200 focus:border-primary"
+                          >
+                             <option value="">-- Unlinked --</option>
+                             {metadata?.sales?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Link Commercial Purchase <span className="font-normal text-gray-400 ml-1">(Optional)</span></label>
+                          <select
+                            {...register('purchase')}
+                            className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white border-gray-200 focus:border-primary"
+                          >
+                             <option value="">-- Unlinked --</option>
+                             {metadata?.purchases?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                          </select>
+                        </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description Notes</label>
+                      <textarea
+                        {...register('notes')}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder-gray-400"
+                        placeholder="Additional details regarding movement..."
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="flex gap-4 pt-6 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={closeModal}
+                        className="flex-1 px-5 py-3.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={createMutator.isPending}
+                        className="flex-1 px-5 py-3.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center"
+                      >
+                        {createMutator.isPending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Push Movement'}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
 
-          {(() => {
-            const hasMeta = Boolean(meta && meta.count)
-            const showPagination = Boolean(meta && meta.previous) || Boolean(meta && meta.next) || (hasMeta && meta.pageSize && meta.count > meta.pageSize)
-            if (!showPagination) return null
-            return (
-              <div className="flex items-center justify-center mt-6 mb-4">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { if (!(meta && meta.previous)) return; setPage(p => Math.max(1, p - 1)) }} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button" disabled={!(meta && meta.previous)} aria-disabled={!(meta && meta.previous)}>
-                    <i className="ri-arrow-left-s-line"></i>
-                    <span className="ml-1">Previous</span>
-                  </button>
-                  <span className="px-4 py-2 text-sm text-gray-600">Page {page}{meta && meta.count ? ' of ' + Math.max(1, Math.ceil(meta.count / (meta.pageSize || 1))) : ''}</span>
-                  <button onClick={() => { if (!(meta && meta.next)) return; setPage(p => p + 1) }} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button" disabled={!(meta && meta.next)} aria-disabled={!(meta && meta.next)}>
-                    <span className="mr-1">Next</span>
-                    <i className="ri-arrow-right-s-line"></i>
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
-
-          {detailOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
+          {/* Phase 42B: Detail Information Snapshot Wrapper */}
+          <AnimatePresence>
+            {detailOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 custom-scrollbar overflow-y-auto"
+              >
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden my-8 border border-gray-100">
+                  <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">Movement Detail</h3>
-                      <p className="text-sm text-gray-500">Full movement information</p>
+                        <h3 className="text-xl font-bold tracking-tight text-gray-900">Ledger Entry Core</h3>
+                        <p className="text-gray-500 text-sm mt-1">Immutable data signature.</p>
                     </div>
-                    <button onClick={() => { setDetailOpen(false); setDetailMovement(null) }} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                      <i className="ri-close-line"></i>
+                    <button onClick={() => setDetailOpen(false)} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-600 bg-white rounded-full border shadow-sm transition-colors shrink-0">
+                      <X size={20}/>
                     </button>
                   </div>
-                  {detailLoading ? (
-                    <div className="p-4 text-center text-gray-500">Loading detail...</div>
-                  ) : detailMovement ? (
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${movementTypeClass(detailMovement.movement_type)}`}>{detailMovement.movement_type}</span>
-                        <span className="text-sm text-gray-600">{formatDate(detailMovement.date)}</span>
-                        <span className={`text-sm font-semibold ${detailMovement.movement_type === 'purchase' ? 'text-green-600' : detailMovement.movement_type === 'sale' ? 'text-red-600' : detailMovement.movement_type === 'adjustment' ? 'text-blue-600' : 'text-gray-900'}`}>{detailMovement.quantity}</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="rounded-lg border border-gray-100 p-3">
-                          <div className="text-xs text-gray-500 mb-1">Item</div>
-                          <div className="text-sm font-medium text-gray-900">{detailMovement.inventory?.item || ''}</div>
-                        </div>
-                        <div className="rounded-lg border border-gray-100 p-3">
-                          <div className="text-xs text-gray-500 mb-1">Warehouse</div>
-                          <div className="text-sm font-medium text-gray-900">{detailMovement.inventory?.warehouse || ''}</div>
-                        </div>
-                        <div className="rounded-lg border border-gray-100 p-3">
-                          <div className="text-xs text-gray-500 mb-1">Current Stock</div>
-                          <div className="text-sm font-medium text-gray-900">{detailMovement.inventory?.current_stock ?? ''}</div>
-                        </div>
-                        <div className="rounded-lg border border-gray-100 p-3">
-                          <div className="text-xs text-gray-500 mb-1">Reference</div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {detailMovement.purchase?.reference || detailMovement.sale?.reference || ''}
+                  <div className="p-6 md:p-8">
+                     {detailLoading ? (
+                       <div className="flex justify-center p-12"><div className="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin"></div></div>
+                     ) : !detailMovement ? (
+                       <p className="text-gray-500 text-center p-4">No details found.</p>
+                     ) : (
+                       <div className="space-y-6">
+                          <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                            <div className="flex items-center gap-3 justify-between">
+                               <div>
+                                  <p className="text-sm font-medium text-gray-500 mb-1">Target Resource</p>
+                                  <h4 className="text-lg font-bold text-gray-900 leading-tight">{detailMovement.inventory?.item}</h4>
+                               </div>
+                               <div className={cn("px-4 py-2 rounded-xl border text-center",
+                                  detailMovement.movement_type === 'purchase' ? 'border-green-200 bg-green-50' :
+                                  detailMovement.movement_type === 'sale' ? 'border-red-200 bg-red-50' :
+                                  'border-blue-200 bg-blue-50'
+                               )}>
+                                 <p className={cn("text-2xl font-black", detailMovement.quantity > 0 ? "text-green-700" : "text-red-700")}>{detailMovement.quantity > 0 ? '+' : ''}{detailMovement.quantity}</p>
+                                 <p className={cn("text-xs font-bold uppercase tracking-wider", detailMovement.quantity > 0 ? "text-green-600" : "text-red-600")}>{detailMovement.movement_type}</p>
+                               </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
 
-                      <div className="rounded-lg border border-gray-100 p-3">
-                        <div className="text-xs text-gray-500 mb-1">Notes</div>
-                        <div className="text-sm text-gray-900">{detailMovement.notes || ''}</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 text-center text-gray-500">No detail available.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                               <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Node Warehouse</p>
+                               <span className="text-sm font-medium text-gray-900">{detailMovement.inventory?.warehouse}</span>
+                            </div>
+                            <div>
+                               <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Timestamp</p>
+                               <span className="text-sm font-medium text-gray-900">{formatDate(detailMovement.date)}</span>
+                            </div>
+                            <div>
+                               <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Remaining Offset</p>
+                               <span className="text-sm font-medium text-gray-900">{detailMovement.inventory?.current_stock} count</span>
+                            </div>
+                            <div>
+                               <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Link</p>
+                               <span className="text-sm font-medium text-gray-900 font-mono">{detailMovement.purchase ? detailMovement.purchase.reference : (detailMovement.sale ? detailMovement.sale.reference : '-')}</span>
+                            </div>
+                          </div>
 
-          {editModalOpen && editingMovement && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Edit Movement</h3>
-                    <button onClick={() => { setEditModalOpen(false); setEditingMovement(null) }} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                      <i className="ri-close-line"></i>
-                    </button>
+                          {detailMovement.notes && (
+                            <div className="pt-4 border-t border-gray-100">
+                               <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Audit Notes</p>
+                               <div className="text-sm text-gray-700 bg-gray-50/50 p-4 rounded-xl border border-gray-100/50 leading-relaxed">
+                                  {detailMovement.notes}
+                               </div>
+                            </div>
+                          )}
+                       </div>
+                     )}
                   </div>
-                  <form onSubmit={handleEditSubmit} id="editMovementForm">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Inventory</label>
-                        <input value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} placeholder="Search inventory..." className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm mb-2" />
-                        <select name="editMovementInventory" defaultValue={editingMovement.inventory || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" onChange={(e) => handleInventorySelect(e.target.value)}>
-                          <option value="">Select inventory</option>
-                          {inventoryOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label || opt.name || opt.id}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Movement Type</label>
-                        <select name="editMovementType" defaultValue={editingMovement.movement_type || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="purchase">purchase</option>
-                          <option value="sale">sale</option>
-                          <option value="adjustment">adjustment</option>
-                          {/*<option value="transfer">transfer</option>*/}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                        <input name="editMovementQuantity" defaultValue={editingMovement.quantity ?? ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Enter quantity" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                        <textarea name="editMovementNotes" defaultValue={editingMovement.notes ?? ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Notes (optional)" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Purchase</label>
-                        <select name="editMovementPurchase" defaultValue={editingMovement.purchase || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="">None</option>
-                          {purchaseOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Sale</label>
-                        <select name="editMovementSale" defaultValue={editingMovement.sale || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="">None</option>
-                          {saleOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-6">
-                      <button type="button" onClick={() => { setEditModalOpen(false); setEditingMovement(null) }} className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700">Cancel</button>
-                      <button type="submit" className="flex-1 px-4 py-3 bg-primary text-white rounded-lg text-sm font-medium">Save Changes</button>
-                    </div>
-                  </form>
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {isModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Add New Movement</h3>
-                    <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                      <i className="ri-close-line"></i>
-                    </button>
-                  </div>
-                  <form onSubmit={handleCreate} id="addMovementForm">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Inventory</label>
-                        <input value={inventorySearch} onChange={(e) => setInventorySearch(e.target.value)} placeholder="Search inventory..." className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm mb-2" />
-                        <select name="movementInventory" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" onChange={(e) => handleInventorySelect(e.target.value)}>
-                          <option value="">Select inventory</option>
-                          {inventoryOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label || opt.name || opt.id}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Movement Type</label>
-                        <select name="movementType" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="purchase">purchase</option>
-                          <option value="sale">sale</option>
-                          <option value="adjustment">adjustment</option>
-                          {/*<option value="transfer">transfer</option>*/}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                        <input name="movementQuantity" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Enter quantity" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                        <textarea name="movementNotes" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Notes (optional)" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Purchase</label>
-                        <select name="movementPurchase" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="">None</option>
-                          {purchaseOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Sale</label>
-                        <select name="movementSale" className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                          <option value="">None</option>
-                          {saleOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-6">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700">Cancel</button>
-                      <button type="submit" className="flex-1 px-4 py-3 bg-primary text-white rounded-lg text-sm font-medium">Add Movement</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
         </main>
       </div>
     </div>

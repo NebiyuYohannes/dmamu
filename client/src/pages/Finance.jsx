@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import toast from '../services/toastService'
+import { getFinanceStats, getAccounts, createAccount, updateAccount } from "../services/financeService";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import * as z from 'zod'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '../utils/cn'
+import { ArrowUpRight, ArrowDownRight, ArrowRight, Building2, Banknote, Search, Plus, Edit2, Wallet, X, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react'
 
 function formatMoney(value) {
   if (value == null || value === '') return '$0'
@@ -11,61 +19,82 @@ function formatMoney(value) {
   return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+// PHASE 28: Zod Schemas for Finance Accounts
+const accountSchema = z.object({
+  name: z.string().min(1, 'Short name is required'),
+  full_name: z.string().min(1, 'Full name is required'),
+  account_type: z.enum(['bank', 'cash']),
+  account_number: z.string().min(1, 'Account number/identifier is required')
+})
+
 export default function Finance() {
-  const [stats, setStats] = useState(null)
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [accountModalOpen, setAccountModalOpen] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
-  const [accounts, setAccounts] = useState([])
 
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+    resolver: zodResolver(accountSchema),
+    defaultValues: { name: '', full_name: '', account_type: 'bank', account_number: '' }
+  })
+
+  // Debouncing Search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
     return () => clearTimeout(t)
   }, [search])
 
-  async function loadStats(currentSearch) {
-    try {
-      const svc = await import('../services/financeService')
-      const res = await svc.getFinanceStats({ search: currentSearch })
-      setStats(res?.data ?? res)
-    } catch (err) {
-      toast.error('Failed to load finance stats')
-    }
-  }
-
-  async function loadAccounts() {
-    try {
-      const svc = await import('../services/financeService')
-      const res = await svc.getAccounts()
-      const list = Array.isArray(res?.data) ? res.data : (res?.data?.results || res)
-      setAccounts(Array.isArray(list) ? list : [])
-    } catch (err) {
-      // Keep UI stable even if accounts fail to load
-      setAccounts([])
-    }
-  }
-
+  // Automatically reset modal form on distinct states
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      if (!mounted) return
-      await loadStats(debouncedSearch)
-      await loadAccounts()
-    })()
-    return () => { mounted = false }
-  }, [debouncedSearch])
+    if (editingAccount) {
+      reset({
+        name: editingAccount.name || '',
+        full_name: editingAccount.full_name || '',
+        account_type: editingAccount.account_type || 'bank',
+        account_number: editingAccount.account_number || ''
+      })
+    } else {
+      reset({ name: '', full_name: '', account_type: 'bank', account_number: '' })
+    }
+  }, [editingAccount, reset])
 
+  // PHASE 29: React Query replacing the huge custom manual promise resolution
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['financeStats', debouncedSearch],
+    queryFn: async () => {
+      const res = await getFinanceStats({ search: debouncedSearch })
+      return res?.data ?? res ?? null
+    },
+    staleTime: 60 * 1000
+  })
+
+  const { data: accountsRaw } = useQuery({
+    queryKey: ['financeAccounts'],
+    queryFn: async () => {
+      const res = await getAccounts()
+      const list = Array.isArray(res?.data) ? res.data : (res?.data?.results || res)
+      return Array.isArray(list) ? list : []
+    },
+    initialData: [],
+    staleTime: 60 * 1000
+  })
+
+  const accounts = accountsRaw || []
+
+  // Derived Values utilizing safely resolved backend payloads
   const expenses = stats?.total_expenses
   const cash = stats?.cash_on_hand
   const banks = Array.isArray(stats?.banks) ? stats.banks : []
+
   const cashAccount = accounts.find((acct) => (
     acct.account_type === 'cash' ||
     acct.name?.toLowerCase() === 'cash on hand' ||
     acct.full_name?.toLowerCase() === 'cash on hand'
   ))
+
   const cashWithId = { ...cash, id: cashAccount?.id, name: cashAccount?.name, full_name: cashAccount?.full_name, account_number: cashAccount?.account_number }
+
   const banksWithIds = banks.map((bank) => {
     const match = accounts.find((acct) => (
       (bank?.account_number && acct.account_number === bank.account_number) ||
@@ -75,11 +104,28 @@ export default function Finance() {
     return { ...bank, id: bank?.id ?? match?.id }
   })
 
+  // Mutations (Auto Cache Healing!)
+  const saveAccountMutator = useMutation({
+    mutationFn: async (payload) => {
+      if (editingAccount) return updateAccount(editingAccount.id || editingAccount.account_id, payload)
+      return createAccount(payload)
+    },
+    onSuccess: () => {
+      toast.success(`Account ${editingAccount ? 'updated' : 'created'} successfully`)
+      queryClient.invalidateQueries({ queryKey: ['financeStats'] })
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] })
+      closeModal()
+    },
+    onError: () => toast.error('Failed to save account')
+  })
+
   function openAddAccount() {
+    setEditingAccount(null)
     setAccountModalOpen(true)
   }
 
-  function openEditAccount(account) {
+  function openEditAccount(account, event) {
+    if (event) event.stopPropagation()
     const match = accounts.find((acct) => (
       (account?.account_number && acct.account_number === account.account_number) ||
       (account?.full_name && acct.full_name === account.full_name) ||
@@ -88,242 +134,260 @@ export default function Finance() {
     const resolvedId = account?.id ?? account?.account_id ?? match?.id
     if (!resolvedId) {
       toast.error('Unable to resolve account id for editing')
+      return
     }
-    setEditingAccount({ ...account, id: resolvedId, account_id: resolvedId })
-    setEditModalOpen(true)
+    setEditingAccount({ ...account, id: resolvedId, account_id: resolvedId, account_type: match?.account_type || 'bank' })
+    setAccountModalOpen(true)
   }
 
-  async function handleCreateAccount(e) {
-    e.preventDefault()
-    const fd = new FormData(e.target)
-    const name = (fd.get('accountName') || '').toString().trim()
-    const fullName = (fd.get('accountFullName') || '').toString().trim()
-    const accountType = (fd.get('accountType') || '').toString().trim()
-    const accountNumber = (fd.get('accountNumber') || '').toString().trim()
-
-    if (!name || !fullName || !accountType || !accountNumber) {
-      toast.error('All fields are required')
-      return
-    }
-
-    try {
-      toast.info('Creating account...')
-      const svc = await import('../services/financeService')
-      await svc.createAccount({
-        name,
-        full_name: fullName,
-        account_type: accountType,
-        account_number: accountNumber
-      })
-      setAccountModalOpen(false)
-      e.target.reset()
-      await loadStats(debouncedSearch)
-      toast.success('Account created')
-    } catch (err) {
-      toast.error('Failed to create account')
-    }
+  function closeModal() {
+    setAccountModalOpen(false)
+    setEditingAccount(null)
+    reset()
   }
 
-  async function handleEditAccount(e) {
-    e.preventDefault()
-    if (!editingAccount?.id && !editingAccount?.account_id) {
-      toast.error('Missing account id')
-      return
-    }
-    const fd = new FormData(e.target)
-    const name = (fd.get('editAccountName') || '').toString().trim()
-    const fullName = (fd.get('editAccountFullName') || '').toString().trim()
-    const accountType = (fd.get('editAccountType') || '').toString().trim()
-    const accountNumber = (fd.get('editAccountNumber') || '').toString().trim()
-
-    if (!name || !fullName || !accountType || !accountNumber) {
-      toast.error('All fields are required')
-      return
-    }
-
-    try {
-      toast.info('Updating account...')
-      const svc = await import('../services/financeService')
-      console.log('Updating account...', { id: editingAccount.id , name, full_name: fullName, account_type: accountType, account_number: accountNumber })
-      await svc.updateAccount(editingAccount.id || editingAccount.account_id, {
-        name,
-        full_name: fullName,
-        account_type: accountType,
-        account_number: accountNumber
-      })
-      setEditModalOpen(false)
-      setEditingAccount(null)
-      await loadStats(debouncedSearch)
-      await loadAccounts()
-      toast.success('Account updated')
-    } catch (err) {
-      toast.error('Failed to update account')
-    }
+  function onSubmit(formData) {
+    saveAccountMutator.mutate(formData)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50/50 pt-20">
       <Header />
       <div className="flex">
         <Sidebar />
-        <main className="flex-1 p-6 md:p-8 md:ml-64">
-          <div className="mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Finance Management</h2>
-            <p className="text-gray-600">Monitor financial performance, manage cash flow, and track revenue and expenses across your business operations.</p>
-          </div>
-
-          <div className="mb-8 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-            <div className="relative w-full md:w-72">
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search accounts..." className="w-full pl-3 pr-4 py-2 border border-gray-200 rounded-lg text-sm" />
-            </div>
-            <button onClick={openAddAccount} className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm">Add Account</button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
-                  <i className="ri-money-dollar-box-line text-white text-xl"></i>
-                </div>
-                <span className="text-sm text-red-100">Expense</span>
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-1">Total Expenses</h3>
-              <p className="text-sm text-red-100 mb-2">{expenses?.label || 'Operating Costs'}</p>
-              <p className="text-2xl font-bold text-white">{formatMoney(expenses?.amount)}</p>
-              <div className="flex items-center gap-2 mt-3">
-                <div className="flex items-center gap-1 text-red-100 text-xs">
-                  <i className="ri-arrow-up-line text-sm"></i>
-                  <span>{expenses?.change_vs_last_month || '0%'}</span>
-                </div>
-                <span className="text-xs text-red-100">vs last month</span>
-              </div>
+        <main className="flex-1 p-6 md:p-8 md:ml-64 w-full transition-all duration-300">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 border-b-2 border-primary inline-block pb-1">Operating Finance</h2>
+              <p className="text-gray-500 text-sm mt-2">Monitor financial performance, manage cash flow, and track bank holdings.</p>
             </div>
 
-            <Link to="/finance/cash" className="block bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:border-purple-200 hover:scale-105 transition-all duration-300 cursor-pointer">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <i className="ri-cash-line text-purple-600 text-xl"></i>
+            <div className="flex flex-col md:flex-row items-center gap-3">
+              <div className="relative w-full md:w-64 group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Search className="text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
                 </div>
-                <span className="text-sm text-gray-500">{cashWithId?.name || 'Cash'}</span>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search accounts..."
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">{cashWithId?.full_name || 'Cash on Hand'}</h3>
-              <p className="text-sm text-gray-600 mb-2">Account: {cashWithId?.account_number || '—'}</p>
-              <p className="text-2xl font-bold text-purple-600">{formatMoney(cash?.amount)}</p>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-sm text-gray-500">{cash?.label || 'Available Cash'}</span>
-                {cashWithId?.id && (
-                  <button
-                    onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); openEditAccount(cashWithId) }}
-                    className="text-xs text-gray-500 hover:text-primary"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-            </Link>
+              <Link
+                to="/finance/cash"
+                className="w-full md:w-auto px-5 py-2.5 !rounded-button bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors shadow-sm flex items-center justify-center gap-2 border border-gray-200"
+              >
+                <ArrowRightLeft size={18} />
+                Cash Flow
+              </Link>
+              <button
+                onClick={openAddAccount}
+                className="w-full md:w-auto px-5 py-2.5 !rounded-button bg-primary text-white font-medium hover:bg-primary/95 transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <Plus size={18} />
+                Add Account
+              </button>
+            </div>
+          </div>
 
-            {banksWithIds.map((acct, index) => (
-              <div key={acct.id || acct.name || index} className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <i className="ri-bank-line text-blue-600 text-xl"></i>
+          {/* KPI Dashboard - Phase 30: Liquid Framer Motion layout */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+            {/* Expense Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 md:p-8 relative overflow-hidden group hover:border-red-200 transition-colors"
+            >
+              <div className="absolute -right-6 -top-6 w-24 h-24 bg-red-50 rounded-full opacity-50 group-hover:scale-125 transition-transform duration-500"></div>
+              <div className="flex items-center justify-between mb-4 relative">
+                <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center shadow-sm">
+                  <TrendingDown className="text-red-600" size={24} />
+                </div>
+                <span className="text-xs font-semibold tracking-wider text-red-400 uppercase">Expense</span>
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-1 relative shrink">{expenses?.label || 'Operating Costs'}</h3>
+              <p className="text-3xl font-black text-red-600 mb-2 relative">{loadingStats ? '...' : formatMoney(expenses?.amount)}</p>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-red-600 relative">
+                <ArrowUpRight size={14} />
+                <span>{expenses?.change_vs_last_month || '0%'}</span>
+                <span className="text-gray-400 font-normal">vs last month</span>
+              </div>
+            </motion.div>
+
+            {/* Cash on Hand Card */}
+            {cash && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                onClick={() => {}}
+                className="bg-white rounded-2xl shadow-sm border border-green-100 p-6 md:p-8 relative overflow-hidden group hover:border-green-200 transition-colors"
+              >
+                <div className="absolute -right-6 -top-6 w-24 h-24 bg-green-50 rounded-full opacity-50 group-hover:scale-125 transition-transform duration-500"></div>
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center shadow-sm">
+                    <Wallet className="text-green-600" size={24} />
                   </div>
-                  <span className="text-xs font-medium text-gray-500">{acct.name}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => openEditAccount(cashWithId, e)}
+                      className="w-8 h-8 rounded-full border bg-white flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary/30 transition-colors shadow-sm"
+                      title="Edit Account"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <span className="text-xs font-semibold tracking-wider text-green-400 uppercase">Storage</span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">{acct.full_name}</h3>
-                <p className="text-sm text-gray-600 mb-2">Account: {acct.account_number}</p>
-                <p className="text-2xl font-bold text-green-600">{formatMoney(acct.balance)}</p>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-sm text-gray-500">{acct.label || 'Available Balance'}</span>
-                  <button onClick={(ev) => { ev.stopPropagation(); openEditAccount(acct) }} className="text-xs text-gray-500 hover:text-primary">Edit</button>
+                <h3 className="text-sm font-semibold text-gray-900 mb-1 relative shrink">{cash?.label || 'Physical Currency'}</h3>
+                <p className="text-3xl font-black text-green-600 mb-2 relative">{loadingStats ? '...' : formatMoney(cash?.amount)}</p>
+                <div className="flex justify-between items-center relative mt-4">
+                  <Link to="/finance/table" className="text-xs font-semibold text-green-600 flex items-center gap-1 hover:text-green-700 transition-colors group/link">
+                    View ledgers
+                    <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
+                  </Link>
                 </div>
-              </div>
+              </motion.div>
+            )}
+
+            {/* Bank Nodes */}
+            {banksWithIds.map((bank, i) => (
+              <motion.div
+                key={bank.account_number || i}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + (i * 0.1) }}
+                className={cn("bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 relative overflow-hidden group transition-colors", bank.balance < 0 ? "border-red-100 hover:border-red-200" : "hover:border-primary/30")}
+              >
+                <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-50 group-hover:scale-125 transition-transform duration-500", bank.balance < 0 ? "bg-red-50" : "bg-primary/5")}></div>
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shadow-sm", bank.balance < 0 ? "bg-red-50" : "bg-primary/10")}>
+                    <Building2 className={cn(bank.balance < 0 ? "text-red-600" : "text-primary")} size={24} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => openEditAccount(bank, e)}
+                      className="w-8 h-8 rounded-full border bg-white flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary/30 transition-colors shadow-sm"
+                      title="Edit Account"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <span className="text-xs font-semibold tracking-wider text-gray-400 uppercase truncate max-w-[80px]" title={bank.full_name}>{bank.name}</span>
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-1 relative shrink truncate">{bank.label || 'Available Balance'}</h3>
+                <p className={cn("text-3xl font-black mb-2 relative", bank.balance < 0 ? "text-red-600" : "text-gray-900")}>
+                  {loadingStats ? '...' : formatMoney(bank.balance)}
+                </p>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium relative mt-3 break-all">
+                   <span className="truncate">{bank.account_number}</span>
+                </div>
+                <div className="flex justify-between items-center relative mt-4 pt-1 border-t border-gray-50">
+                  <Link to="/finance/table" className="text-xs font-semibold text-primary flex items-center gap-1 hover:text-primary/80 transition-colors group/link mt-2">
+                    View ledgers
+                    <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
+                  </Link>
+                </div>
+              </motion.div>
             ))}
           </div>
         </main>
       </div>
 
-      {accountModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Add Account</h3>
-              <button onClick={() => setAccountModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
-                <i className="ri-close-line"></i>
-              </button>
-            </div>
-            <div className="p-6">
-              <form onSubmit={handleCreateAccount} className="space-y-4">
+      {/* Modern Account Modal */}
+      <AnimatePresence>
+        {accountModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm shadow-sm flex items-center justify-center z-[100] p-4 overflow-y-auto custom-scrollbar"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md mx-4 my-8 relative overflow-hidden"
+            >
+              <div className="p-6 md:p-8 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                  <input name="accountName" required className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Short name (e.g. CBE)" />
+                  <h3 className="text-xl font-bold tracking-tight text-gray-900">{editingAccount ? 'Edit Account' : 'Add New Account'}</h3>
+                  <p className="text-gray-500 text-sm mt-1">{editingAccount ? 'Update account details mapping.' : 'Register a new cash or bank node.'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                  <input name="accountFullName" required className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Full account name" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
-                  <select name="accountType" required className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                    <option value="">Select type</option>
-                    <option value="bank">Bank Account</option>
-                    <option value="cash">Cash on Hand</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
-                  <input name="accountNumber" required className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Account number" />
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button type="button" onClick={() => setAccountModalOpen(false)} className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap !rounded-button">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap !rounded-button">Save Account</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+                <button
+                  onClick={closeModal}
+                  className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
-      {editModalOpen && editingAccount && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Edit Account</h3>
-              <button onClick={() => { setEditModalOpen(false); setEditingAccount(null) }} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
-                <i className="ri-close-line"></i>
-              </button>
-            </div>
-            <div className="p-6">
-              <form onSubmit={handleEditAccount} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6 md:p-8 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                  <input name="editAccountName" required defaultValue={editingAccount.name || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Short name (e.g. CBE)" />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Short Name <span className="text-gray-400 font-normal">(e.g. CBE)</span></label>
+                  <input
+                    {...register('name')}
+                    className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20", errors.name ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                    placeholder="Enter short name"
+                  />
+                  {errors.name && <p className="mt-1.5 text-xs font-medium text-red-500">{errors.name.message}</p>}
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                  <input name="editAccountFullName" required defaultValue={editingAccount.full_name || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Full account name" />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Full Bank/Entity Name</label>
+                  <input
+                    {...register('full_name')}
+                    className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20", errors.full_name ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                    placeholder="Commercial Bank of Ethiopia"
+                  />
+                  {errors.full_name && <p className="mt-1.5 text-xs font-medium text-red-500">{errors.full_name.message}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
-                  <select name="editAccountType" required defaultValue={editingAccount.account_type || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm">
-                    <option value="">Select type</option>
-                    <option value="bank">Bank Account</option>
-                    <option value="cash">Cash on Hand</option>
-                  </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Account Type</label>
+                    <select
+                      {...register('account_type')}
+                      className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white", errors.account_type ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                    >
+                      <option value="bank">Bank Account</option>
+                      <option value="cash">Cash Storage</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Account Number / ID</label>
+                    <input
+                      {...register('account_number')}
+                      className={cn("w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20", errors.account_number ? "border-red-500" : "border-gray-200 focus:border-primary")}
+                      placeholder="1000500..."
+                    />
+                    {errors.account_number && <p className="mt-1.5 text-xs font-medium text-red-500">{errors.account_number.message}</p>}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
-                  <input name="editAccountNumber" required defaultValue={editingAccount.account_number || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" placeholder="Account number" />
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button type="button" onClick={() => { setEditModalOpen(false); setEditingAccount(null) }} className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap !rounded-button">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap !rounded-button">Save Changes</button>
+
+                <div className="flex gap-4 pt-6 border-t border-gray-100">
+                  <button
+                    type="button" onClick={closeModal}
+                    className="flex-1 px-5 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit" disabled={saveAccountMutator.isPending}
+                    className="flex-1 px-5 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center"
+                  >
+                    {saveAccountMutator.isPending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Save Account'}
+                  </button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

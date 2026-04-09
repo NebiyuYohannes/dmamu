@@ -3,6 +3,8 @@ import { Link, useParams, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import toast from '../services/toastService'
+import { cn } from '../utils/cn'
+import { Search, ArrowUpDown, ChevronLeft, ChevronRight, Filter, ArrowLeft, Package, Boxes, DollarSign, Tag } from 'lucide-react'
 
 function formatCurrency(value) {
   if (value == null) return ''
@@ -183,38 +185,48 @@ export default function InventoryTable() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50/50 pt-20 pb-20 md:pb-0">
       <Header />
       <div className="flex">
         <Sidebar />
-        <main className="flex-1 p-6 md:p-8 md:ml-64">
+        <main className="flex-1 p-6 md:p-8 md:ml-64 w-full transition-all duration-300">
           <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Link to="/inventory" className="flex items-center gap-2 text-gray-600 hover:text-primary transition-colors">
-                <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-left-line"></i></div>
+            <div className="flex items-center gap-3 mb-3 md:mb-4">
+              <Link to="/inventory" className="flex items-center gap-2 text-gray-500 hover:text-primary transition-colors font-medium">
+                <ArrowLeft size={16} />
                 <span className="text-sm">Back to Inventory</span>
               </Link>
             </div>
-
-            
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{item?.name || 'Inventory Detail'}</h2>
-            <p className="text-gray-600 text-sm md:text-base">Comprehensive product information and inventory management</p>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 border-b-2 border-primary inline-block pb-1">{item?.name || 'Inventory Detail'}</h2>
+            <p className="text-gray-500 text-sm mt-2">Comprehensive product information and inventory management</p>
           </div>
 
-          <div className="mb-4 md:mb-6">
-            <div className="flex flex-col sm:flex-row gap-2 md:gap-4 sm:items-center sm:justify-between">
-              <div className="flex flex-row gap-2 sm:gap-3 items-center">
-                <div className="relative flex-1">
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..." className="pl-3 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-full" />
+          <div className="bg-white border text-sm md:text-base border-gray-200 rounded-2xl shadow-sm mb-8 overflow-hidden">
+            <div className="p-4 md:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between bg-gray-50/30">
+              <div className="relative w-full md:w-96 group flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Search className="text-gray-400 group-focus-within:text-primary transition-colors" size={18} />
                 </div>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search products..."
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                />
+              </div>
 
+              <div className="relative flex items-center gap-3 w-full md:w-auto">
                 <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); setFilterOpen(v => !v); setSortOpen(false) }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button">
-                    <div className="flex items-center gap-2"><i className="ri-filter-3-line"></i><span className="hidden sm:inline">All Categories</span></div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setFilterOpen(v => !v); setSortOpen(false) }}
+                    className="w-full md:w-auto px-4 py-2 border border-gray-200 bg-white rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Filter size={16} />
+                    <span className="hidden sm:inline">All Categories</span>
                   </button>
                   {filterOpen && (
-                    <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                      <div className="p-2">
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                      <div className="py-2">
                         {[
                           { k: 'all', l: 'All Categories' },
                           { k: 'safety equipment', l: 'Safety Equipment' },
@@ -222,7 +234,11 @@ export default function InventoryTable() {
                           { k: 'machinery', l: 'Machinery' },
                           { k: 'materials', l: 'Materials' }
                         ].map((opt) => (
-                          <button key={opt.k} onClick={(ev) => { ev.stopPropagation(); setCurrentFilter(opt.k); setFilterOpen(false) }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">
+                          <button
+                            key={opt.k}
+                            onClick={(ev) => { ev.stopPropagation(); setCurrentFilter(opt.k); setFilterOpen(false) }}
+                            className={cn("w-full text-left px-4 py-2 text-sm transition-colors", currentFilter === opt.k ? "bg-primary/5 text-primary font-medium" : "text-gray-700 hover:bg-gray-50")}
+                          >
                             {opt.l}
                           </button>
                         ))}
@@ -231,15 +247,17 @@ export default function InventoryTable() {
                   )}
                 </div>
 
-                <div className="relative sm:flex-initial">
-                  <button onClick={(e) => { e.stopPropagation(); setSortOpen(v => !v); setFilterOpen(false) }} className="w-full sm:w-auto flex items-center justify-center gap-2 px-2 md:px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap !rounded-button">
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-sort-desc"></i></div>
+                <div className="relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSortOpen(v => !v); setFilterOpen(false) }}
+                    className="w-full md:w-auto px-4 py-2 border border-gray-200 bg-white rounded-lg text-sm text-gray-700 hover:bg-gray-50 !rounded-button flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <ArrowUpDown size={16} />
                     <span className="hidden sm:inline">Sort</span>
-                    <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-down-s-line"></i></div>
                   </button>
                   {sortOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                      <div className="p-2">
+                    <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden">
+                      <div className="py-2 max-h-64 overflow-y-auto">
                         {[
                           { k: 'current_stock', l: 'Stock (low → high)' },
                           { k: '-current_stock', l: 'Stock (high → low)' },
@@ -252,7 +270,11 @@ export default function InventoryTable() {
                           { k: 'worth', l: 'Worth (low → high)' },
                           { k: '-worth', l: 'Worth (high → low)' }
                         ].map((opt) => (
-                          <button key={opt.k} onClick={(ev) => { ev.stopPropagation(); setCurrentSort(opt.k); setSortOpen(false) }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded">
+                          <button
+                            key={opt.k}
+                            onClick={(ev) => { ev.stopPropagation(); setCurrentSort(opt.k); setSortOpen(false) }}
+                            className={cn("w-full text-left px-4 py-2 text-sm transition-colors", currentSort === opt.k ? "bg-primary/5 text-primary font-medium" : "text-gray-700 hover:bg-gray-50")}
+                          >
                             {opt.l}
                           </button>
                         ))}
@@ -262,155 +284,124 @@ export default function InventoryTable() {
                 </div>
               </div>
             </div>
-          </div>
 
-
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 md:p-6 mb-8">
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                    <tr className="border-b border-gray-100">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Product</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Category</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Stock</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Worth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={4} className="p-6 text-center text-gray-500">Loading inventory...</td></tr>
-                  ) : filtered.length === 0 ? (
-                    <tr><td colSpan={4} className="p-6 text-center text-gray-500">No products found.</td></tr>
-                  ) : (
-                    filtered.map((product) => (
-                      <tr key={product.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <p className="font-medium text-gray-900">{product.product}</p>
+            <div className="p-4 md:p-5">
+              <h3 className="text-lg md:text-xl font-bold tracking-tight text-gray-900 mb-4 border-b pb-2 inline-block border-gray-200">Products Overview</h3>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50">
+                      <tr className="text-xs font-semibold text-gray-500 uppercase">
+                      <th className="py-3 px-4 border-b border-gray-200">Product</th>
+                      <th className="py-3 px-4 border-b border-gray-200">Category</th>
+                      <th className="py-3 px-4 border-b border-gray-200">Stock Node</th>
+                      <th className="py-3 px-4 border-b border-gray-200">Worth Metric</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {loading ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-gray-500">Loading inventory...</td></tr>
+                    ) : filtered.length === 0 ? (
+                      <tr><td colSpan={4} className="p-8 text-center text-gray-500">No products found.</td></tr>
+                    ) : (
+                      filtered.map((product) => (
+                        <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <Package className="text-primary/70 shrink-0" size={16} />
+                              <p className="font-semibold text-gray-900">{product.product}</p>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{product.category}</span>
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="text-sm font-medium text-gray-900">{product.stock}</span>
-                        </td>
-                        <td className="py-4 px-4 font-semibold text-gray-900">{formatCurrency(product.worth)}</td>
-                        
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="md:hidden space-y-4">
-              {loading ? (
-                <div className="p-4 text-center text-gray-500">Loading inventory...</div>
-              ) : filtered.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No products found.</div>
-              ) : (
-                filtered.map((product) => (
-                  <div key={product.id} className="border border-gray-100 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{product.product}</h3>
-                          <p className="text-xs text-gray-400 mt-1">{product.category}</p>
-                        </div>
-                      </div>
-                      {/* actions removed - no edit/delete in mobile card */}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-gray-900">{product.stock} units</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(product.worth)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100 flex gap-1">
+                              <Tag size={12}/>{product.category || 'Uncategorized'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-sm font-semibold text-gray-900 bg-gray-50 px-2 py-1 rounded-md">{product.stock} count</span>
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-gray-900 flex items-center gap-1">
+                            <DollarSign className="text-gray-400" size={14}/> {formatCurrency(product.worth).replace('$', '')}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-          {editModalOpen && editingProduct && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Edit Product</h3>
-                    <button onClick={() => { setEditModalOpen(false); setEditingProduct(null) }} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"><i className="ri-close-line"></i></button>
-                  </div>
-                  <form onSubmit={handleEditSubmit} id="editProductForm">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Product</label>
-                        <input name="editProduct" required defaultValue={editingProduct.product || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+              <div className="md:hidden space-y-4">
+                {loading ? (
+                  <div className="p-6 text-center text-gray-500">Loading inventory...</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">No products found.</div>
+                ) : (
+                  filtered.map((product) => (
+                    <div key={product.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3 border-b border-gray-50 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Package className="text-primary/50" size={16} />
+                          <h3 className="font-semibold text-gray-900 text-sm">{product.product}</h3>
+                        </div>
+                        <span className="font-bold text-gray-900 text-sm">{formatCurrency(product.worth)}</span>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                        <input name="editCategory" required defaultValue={editingProduct.category || ''} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
-                        <input type="number" name="editStock" required defaultValue={editingProduct.stock || 0} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Worth</label>
-                        <input type="number" name="editWorth" required defaultValue={editingProduct.worth || 0} className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm" />
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">{product.category || 'Uncategorized'}</span>
+                        <span className="font-medium bg-gray-100 px-2 py-0.5 rounded">{product.stock} units</span>
                       </div>
                     </div>
-                    <div className="flex gap-3 mt-6">
-                      <button type="button" onClick={() => { setEditModalOpen(false); setEditingProduct(null) }} className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700">Cancel</button>
-                      <button type="submit" className="flex-1 px-4 py-3 bg-primary text-white rounded-lg text-sm font-medium">Save Changes</button>
-                    </div>
-                  </form>
-                </div>
+                  ))
+                )}
               </div>
             </div>
-          )}
 
-          <div className="flex items-center justify-center mt-6 mb-4">
             {(() => {
               const hasMeta = Boolean(count)
               const showPagination = Boolean(prevPageUrl) || Boolean(nextPageUrl) || (hasMeta && pageSize && count > pageSize)
               if (!showPagination) return null
               return (
-                <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => {
-                      if (!prevPageUrl) return
-                      console.debug('InventoryTable: prevPageUrl click', { prevPageUrl, page })
-                      try {
-                        const u = new URL(prevPageUrl, window.location.origin)
-                        const p = Number(u.searchParams.get('page') || 1)
-                        console.debug('InventoryTable: parsed prev page', p)
-                        setPage(Number.isFinite(p) ? Math.max(1, p) : (page > 1 ? page - 1 : 1))
-                      } catch (e) {
-                        console.debug('InventoryTable: prev parse failed, fallback', e)
-                        setPage(p => Math.max(1, p - 1))
-                      }
-                    }} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button" disabled={!prevPageUrl} aria-disabled={!prevPageUrl}>
-                    <i className="ri-arrow-left-s-line"></i>
-                    <span className="ml-1">Previous</span>
-                  </button>
-                  <span className="px-4 py-2 text-sm text-gray-600">Page {page}{count ? ' of ' + Math.max(1, Math.ceil(count / (pageSize || 1))) : ''}</span>
-                  <button type="button" onClick={() => {
-                      if (!nextPageUrl) return
-                      console.debug('InventoryTable: nextPageUrl click', { nextPageUrl, page })
-                      try {
-                        const u = new URL(nextPageUrl, window.location.origin)
-                        const p = Number(u.searchParams.get('page') || (page + 1))
-                        console.debug('InventoryTable: parsed next page', p)
-                        setPage(Number.isFinite(p) ? p : (page + 1))
-                      } catch (e) {
-                        console.debug('InventoryTable: next parse failed, fallback', e)
-                        setPage(p => p + 1)
-                      }
-                    }} className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button" disabled={!nextPageUrl} aria-disabled={!nextPageUrl}>
-                    <span className="mr-1">Next</span>
-                    <i className="ri-arrow-right-s-line"></i>
-                  </button>
+                <div className="flex items-center justify-between p-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500 hidden sm:block">
+                     Page {page}{count ? ' of ' + Math.max(1, Math.ceil(count / (pageSize || 1))) : ''}
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <button
+                      onClick={() => {
+                        if (!prevPageUrl) return
+                        try {
+                          const u = new URL(prevPageUrl, window.location.origin)
+                          const p = Number(u.searchParams.get('page') || 1)
+                          setPage(Number.isFinite(p) ? Math.max(1, p) : (page > 1 ? page - 1 : 1))
+                        } catch (e) {
+                          setPage(p => Math.max(1, p - 1))
+                        }
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                      disabled={!prevPageUrl}
+                    >
+                      <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:block">Previous</span>
+                    </button>
+
+                    <span className="text-sm text-gray-500 sm:hidden self-center">Page {page}</span>
+
+                    <button
+                      onClick={() => {
+                        if (!nextPageUrl) return
+                        try {
+                          const u = new URL(nextPageUrl, window.location.origin)
+                          const p = Number(u.searchParams.get('page') || 1)
+                          setPage(Number.isFinite(p) ? p : page + 1)
+                        } catch (e) {
+                          setPage(p => p + 1)
+                        }
+                      }}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap !rounded-button flex items-center"
+                      disabled={!nextPageUrl}
+                    >
+                      <span className="hidden sm:block">Next</span>
+                      <ChevronRight className="w-4 h-4 sm:ml-1" />
+                    </button>
+                  </div>
                 </div>
               )
             })()}
