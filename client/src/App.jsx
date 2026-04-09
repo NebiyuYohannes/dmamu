@@ -24,6 +24,7 @@ import ActivateAccount from './pages/ActivateAccount'
 import Landing from './pages/Landing'
 import NotFound from './pages/NotFound'
 import ProtectedRoute from './components/ProtectedRoute'
+import ChoosePlan from './pages/ChoosePlan'
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/accounts/activate/:uid/:token" element={<ActivateAccount />} />
         <Route element={<ProtectedRoute />}>
+          <Route path="/choose-plan" element={<ChoosePlan />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/crm" element={<CRM />} />
           <Route path="/crm/customer/:id" element={<CustomerProfile />} />
