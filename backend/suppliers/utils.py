@@ -68,7 +68,11 @@ def export_supplier_history(export_type, data, supplier_id):
         elements.append(table)
         doc.build(elements)
 
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/pdf',
+            status=200
+        )        
         response['Content-Disposition'] = f'attachment; filename="supplier_{supplier_id}_history.pdf"'
 
         buffer.close()

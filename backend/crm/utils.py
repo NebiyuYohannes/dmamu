@@ -72,7 +72,10 @@ def export_customer_history(export_type, data, customer_id):
 
         buffer.seek(0)
 
-        response = HttpResponse(buffer, content_type='application/pdf')
+        response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/pdf',
+        status=200)
         response['Content-Disposition'] = f'attachment; filename="customer_{customer_id}_history.pdf"'
 
         return response
