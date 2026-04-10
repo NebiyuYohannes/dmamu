@@ -9,6 +9,7 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = ['id', 'name', 'full_name', 'account_type', 'account_number', 'balance']
 
+
 class TransactionSerializer(serializers.ModelSerializer):
     bank_account = serializers.CharField(source='account.full_name', read_only=True)
     linked_sale = serializers.PrimaryKeyRelatedField(queryset=Sale.objects.all(), required=False, allow_null=True)

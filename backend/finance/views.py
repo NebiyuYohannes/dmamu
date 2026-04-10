@@ -28,6 +28,7 @@ class AccountViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
 
+
 class TransactionViewSet(viewsets.ModelViewSet):
     serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
@@ -108,6 +109,7 @@ def finance_stats(request):
         },
         "banks": banks_formatted
     })
+
 
 @api_view(['GET'])
 @permission_classes([HasActiveSubscription, IsAuthenticated])
