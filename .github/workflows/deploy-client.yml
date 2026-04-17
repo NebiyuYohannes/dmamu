@@ -9,10 +9,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Heroku CLI
-        run: curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Deploy Client to Heroku
         env:
@@ -20,26 +18,32 @@ jobs:
           HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME_CLIENT }}
           HEROKU_EMAIL: ${{ secrets.HEROKU_EMAIL_CLIENT }}
         run: |
-          # Login to Heroku
+          # 1. Setup Heroku Authentication
           echo "machine api.heroku.com" > ~/.netrc
+          echo "login $HEROKU_EMAIL" >> ~/.netrc
+          echo "password $HEROKU_API_KEY" >> ~/.netrc
+          
+          echo "machine git.heroku.com" >> ~/.netrc
           echo "login $HEROKU_EMAIL" >> ~/.netrc
           echo "password $HEROKU_API_KEY" >> ~/.netrc
           chmod 600 ~/.netrc
 
-          # Copy only the client folder and deploy
+          # 2. Isolate the client folder
+          # We copy it to a temp directory so Heroku sees it as the project root
           mkdir -p /tmp/client-deploy
           cp -r client/. /tmp/client-deploy/
-
           cd /tmp/client-deploy
 
-          # === FIXED PART STARTS HERE ===
-          git init
-          git checkout -b main                    # removes the "master" warning
+          # 3. Initialize temporary Git repo and set identity
+          git init -b main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Auto-deploy from GitHub Actions - ${{ github.sha }}"
-          # === FIXED PART ENDS HERE ===
 
-          heroku git:remote -a $HEROKU_APP_NAME
-          git push heroku HEAD:main --force
+          # 4. Commit the files
+          git add .
+          git commit -m "Auto-deploy client from GitHub Actions - ${GITHUB_SHA::8}"
+
+          # 5. Push to Heroku
+          # We add the remote and force push the local 'main' to Heroku's 'main'
+          git remote add heroku https://git.heroku.com/$HEROKU_APP_NAME.git
+          git push heroku main --force
