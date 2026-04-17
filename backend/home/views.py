@@ -1,6 +1,6 @@
-from django.shortcuts import render
+from django.http import HttpResponse
 
 def home_page(request):
-    return render(request, 'home/index.html', {})
+    return HttpResponse("<h1>Habsify Backend is LIVE ✅</h1>", status=200)
 
 
