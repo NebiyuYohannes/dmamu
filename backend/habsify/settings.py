@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ==============================================================================
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
-ALLOWED_HOSTS = ["habsifybackend-prod-7a317b11fa8d.herokuapp.com"]
+ALLOWED_HOSTS = ["habsifybackend-prod-7a317b11fa8d.herokuapp.com",'localhost', '127.0.0.1']
 # ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
 
 # ==============================================================================
@@ -164,6 +164,7 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'BLACKLIST_AFTER_ROTATION': True,
     'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'TOKEN_OBTAIN_SERIALIZER': 'accounts.serializers.CustomTokenObtainPairSerializer',
 }
 
 DJOSER = {
@@ -173,6 +174,7 @@ DJOSER = {
     'SEND_ACTIVATION_EMAIL': False,
     'SERIALIZERS': {
         'user_create_password_retype': 'accounts.serializers.CreatePasswordRetypeSerializer',
+        'token_create': 'accounts.serializers.CustomTokenCreateSerializer',
     },
 }
 
