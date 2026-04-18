@@ -10,7 +10,7 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['company']
 
     def get_items(self, obj):
-        return obj.item_count
+        return obj.items.count()
         
     def validate(self, attrs):
         name = attrs.get('name', '').strip()
@@ -141,6 +141,7 @@ class StockMovementCreateUpdateSerializer(serializers.ModelSerializer):
 
         return data
     
+
 class StockMovementListSerializer(serializers.ModelSerializer):
 
     item_name = serializers.CharField(
@@ -174,6 +175,7 @@ class StockMovementListSerializer(serializers.ModelSerializer):
             return f"SAL-{obj.sale.id}"
         return "-"
     
+
 class StockMovementDetailSerializer(serializers.ModelSerializer):
 
     inventory = serializers.SerializerMethodField()
@@ -206,7 +208,8 @@ class StockMovementDetailSerializer(serializers.ModelSerializer):
                 "reference": f"SAL-{obj.sale.id}",
             }
         return None
-    
+
+
 class InventoryDropdownSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
@@ -239,3 +242,5 @@ class InventoryDropdownSerializer(serializers.ModelSerializer):
             return f"SAL-{movement.sale.id}"
 
         return "-"
+    
+    
