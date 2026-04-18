@@ -88,15 +88,17 @@ TEMPLATES = [
     },
 ]
 
+import dj_database_url
+import os
+from decouple import config   
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("POSTGRES_DB", default="habsify_db"),
-        "USER": config("POSTGRES_USER", default="habsify_user"),
-        "PASSWORD": config("POSTGRES_PASSWORD", default="habsify_password"),
-        "HOST": config("POSTGRES_HOST", default="db"),
-        "PORT": config("POSTGRES_PORT", default="5432"),
-    }
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
+        conn_max_age=600,        
+        conn_health_checks=True,
+        ssl_require=True,         
+    )
 }
 
 if not DEBUG:
