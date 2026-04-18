@@ -16,8 +16,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ==============================================================================
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
-ALLOWED_HOSTS = ["habsifybackend-prod-7a317b11fa8d.herokuapp.com",'localhost', '127.0.0.1']
-# ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+
+ALLOWED_HOSTS = config(
+    "DJANGO_ALLOWED_HOSTS",
+    default="127.0.0.1,localhost,habsifybackend-prod-7a317b11fa8d.herokuapp.com").split(",")
 
 # ==============================================================================
 # APPLICATIONS & MIDDLEWARE
