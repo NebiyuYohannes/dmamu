@@ -8,6 +8,7 @@ admin.site.index_title = "Welcome to Habsify Administration"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('home.urls')),
+    path('company/', include('core.urls')),
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),
     path('accounts/', include('accounts.urls')),
