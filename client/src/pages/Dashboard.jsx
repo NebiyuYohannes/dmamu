@@ -24,6 +24,8 @@ import { LayoutDashboard, ShoppingCart, LogOut, ArrowRightLeft } from 'lucide-re
 import CRMTabs from '../components/InventoryTabs' // wait, check imports
 import { getPaymentMethods } from '../services/subscriptionService'
 
+const asArray = (arr) => Array.isArray(arr) ? arr : [];
+
 const emptyDashboardData = {
   financialOverview: {},
   businessKPIs: {},
@@ -54,15 +56,13 @@ export default function Dashboard() {
       const results = await Promise.allSettled([
         getBusinessKpis(), getFinancialOverview(), getTopProducts(), getTopCustomers(),
         getTopSuppliers(), getTopProductsChart(), getCustomerGrowth(), getRecentActivity(),
-        api.get('/sales-purchases/suppliers/dropdown/'), api.get('/crm/customers-dropdown/'), api.get('/sales-purchases/items/dropdown/'), api.get('/sales-purchases/warehouses/dropdown/'), getAccounts(), getUsers(),
-        getPaymentMethods()
+        getUsers()
       ])
 
       const [
         businessKpisRes, financialOverviewRes, topProductsRes, topCustomersRes,
         topSuppliersRes, topProductsChartRes, customerGrowthRes, recentActivityRes,
-        suppliersRes, customersRes, itemsRes, warehousesRes, accountsRes, usersRes,
-        paymentMethodsRes
+        usersRes
       ] = results.map(r => r.status === 'fulfilled' ? r.value : null)
 
       const toList = (res) => Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : res?.data?.results ?? [])
@@ -78,16 +78,36 @@ export default function Dashboard() {
           customerGrowth: customerGrowthRes?.data ?? { labels: [], data: [] }
         },
         recentActivity: toList(recentActivityRes),
-        suppliers: toList(suppliersRes),
-        customers: toList(customersRes),
-        items: toList(itemsRes),
-        warehouses: toList(warehousesRes),
-        accounts: toList(accountsRes),
-        user: (toList(usersRes)[0] ?? null),
-        paymentMethods: toList(paymentMethodsRes)
+        user: (toList(usersRes)[0] ?? null)
       }
     },
     staleTime: 5 * 60 * 1000
+  });
+
+  const { data: dropdowns, isLoading: loadingDropdowns } = useQuery({
+    queryKey: ['dashboardDropdowns', isModalOpen],
+    queryFn: async () => {
+      const results = await Promise.allSettled([
+        api.get('/sales-purchases/suppliers/dropdown/'),
+        api.get('/crm/customers-dropdown/'),
+        api.get('/sales-purchases/items/dropdown/'),
+        api.get('/sales-purchases/warehouses/dropdown/'),
+        getAccounts(),
+        getPaymentMethods()
+      ])
+      const toList = (res) => Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : res?.data?.results ?? [])
+      return {
+        suppliers: toList(results[0].status === 'fulfilled' ? results[0].value : null),
+        customers: toList(results[1].status === 'fulfilled' ? results[1].value : null),
+        items: toList(results[2].status === 'fulfilled' ? results[2].value : null),
+        warehouses: toList(results[3].status === 'fulfilled' ? results[3].value : null),
+        accounts: toList(results[4].status === 'fulfilled' ? results[4].value : null),
+        paymentMethods: toList(results[5].status === 'fulfilled' ? results[5].value : null),
+      }
+    },
+    enabled: isModalOpen,
+    staleTime: 0,
+    gcTime: 0
   });
 
   const queryClient = useQueryClient()
@@ -136,6 +156,10 @@ export default function Dashboard() {
     onSuccess: (res, variables) => {
       toastSuccess(`${variables.type === 'buy' ? 'Purchase' : variables.type === 'sell' ? 'Sale' : 'Expense'} recorded successfully!`)
       setIsModalOpen(false)
+      setSelectedType(null)
+      setBuyForm({ supplier: '', item: '', quantity: '', unit_price: '', warehouse: '', status: 'unpaid', payment_method: '', account: '', notes: '' })
+      setSellForm({ customer: '', item: '', quantity: '', unit_price: '', warehouse: '', status: 'unpaid', payment_method: '', account: '', notes: '' })
+      setExpenseForm({ category: '', amount: '', description: '', payment_method: '', account: '' })
       // Automatically triggers Dashboard refetch to instantly update numbers without manual reloads
       queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
     },
@@ -244,7 +268,6 @@ export default function Dashboard() {
     }
   };
 
-  const asArray = (value) => (Array.isArray(value) ? value : value?.results ?? []);
   const toNumber = (value) => {
     const cleaned = String(value ?? '').replace(/[^0-9.-]+/g, '')
     const parsed = Number(cleaned)
@@ -576,7 +599,7 @@ export default function Dashboard() {
                       </div>
 
                       <div className="p-6 overflow-y-auto custom-scrollbar flex-1 relative">
-                        {loading && (
+                        {loadingDropdowns && (
                           <div className="animate-pulse space-y-5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="h-10 bg-gray-100 rounded"></div>
@@ -594,14 +617,17 @@ export default function Dashboard() {
                             <div className="h-20 bg-gray-100 rounded"></div>
                           </div>
                         )}
-                        {!loading && (
+                        {!loadingDropdowns && (
                           <div className="mb-6">
                             <label className="block text-sm font-medium text-gray-700 mb-3">Data Type</label>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                               <button
                                   type="button"
                                   data-type="sell"
-                                  onClick={() => setSelectedType('sell')}
+                                  onClick={() => {
+                                    setSelectedType('sell')
+                                    setSellForm({ customer: '', item: '', quantity: '', unit_price: '', warehouse: '', status: 'unpaid', payment_method: '', account: '', notes: '' })
+                                  }}
                                   className={`!rounded-button whitespace-nowrap p-4 border-2 rounded-xl transition-all text-center ${
                                     selectedType === 'sell' ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-gray-200 hover:border-primary hover:bg-primary/5'
                                   }`}
@@ -645,7 +671,7 @@ export default function Dashboard() {
 
                         {/* Dynamic Form */}
                         <div id="dynamic-form-container">
-                          {loading && (
+                          {loadingDropdowns && (
                             <div className="animate-pulse space-y-5">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="h-10 bg-gray-100 rounded"></div>
@@ -663,7 +689,7 @@ export default function Dashboard() {
                               <div className="h-20 bg-gray-100 rounded"></div>
                             </div>
                           )}
-                          {!loading && selectedType === 'sell' && (
+                          {!loadingDropdowns && selectedType === 'sell' && (
                               <div className="space-y-5">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
@@ -674,11 +700,11 @@ export default function Dashboard() {
                                         className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary"
                                     >
                                       <option value="">Select Customer</option>
-                                      {(asArray(data?.customers)).map(c => (
+                                      {(asArray(dropdowns?.customers)).map(c => (
                                           <option key={c.id} value={c.id}>{c.label ?? c.name}</option>
                                       ))}
                                     </select>
-                                    {asArray(data?.customers).length === 0 && (
+                                    {asArray(dropdowns?.customers).length === 0 && (
                                       <p className="text-xs text-gray-500 mt-2">No customers found.</p>
                                     )}
                                   </div>
@@ -688,7 +714,7 @@ export default function Dashboard() {
                                     <select
                                         value={sellForm.item}
                                         onChange={(e) => {
-                                          const selectedItem = (data?.items ?? []).find(i => i.id === Number(e.target.value));
+                                          const selectedItem = (dropdowns?.items ?? []).find(i => i.id === Number(e.target.value));
                                           setSellForm({
                                             ...sellForm,
                                             item: e.target.value,
@@ -698,7 +724,7 @@ export default function Dashboard() {
                                         className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary"
                                     >
                                       <option value="">Select Item</option>
-                                      {(asArray(data?.items)).map(i => (
+                                      {(asArray(dropdowns?.items)).map(i => (
                                           <option key={i.id} value={i.id}>{i.name || i.label || `Item ${i.id}`}</option>
                                       ))}
                                     </select>
@@ -727,7 +753,7 @@ export default function Dashboard() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
                                     <select value={sellForm.warehouse} onChange={e => setSellForm({ ...sellForm, warehouse: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                       <option value="">Select Warehouse</option>
-                                      {(asArray(data?.warehouses)).map(w => (
+                                      {(asArray(dropdowns?.warehouses)).map(w => (
                                           <option key={w.id} value={w.id}>{w.name}</option>
                                       ))}
                                     </select>
@@ -750,7 +776,7 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                         <select value={sellForm.payment_method} onChange={e => setSellForm({ ...sellForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                           <option value="">Select Method</option>
-                                          {(data?.paymentMethods || []).map(m => (
+                                          {(dropdowns?.paymentMethods || []).map(m => (
                                             <option key={m.id} value={m.code}>{m.label}</option>
                                           ))}
                                         </select>
@@ -760,10 +786,10 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
                                         <select value={sellForm.account} onChange={e => setSellForm({ ...sellForm, account: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary" disabled={!sellForm.payment_method}>
                                           <option value="">Select Account</option>
-                                          {(asArray(data?.accounts))
+                                          {(asArray(dropdowns?.accounts))
                                               .filter(a => {
                                                   if (!sellForm.payment_method) return true;
-                                                  const selectedLabel = (data?.paymentMethods || []).find(m => String(m.code) === String(sellForm.payment_method))?.label?.toLowerCase() || '';
+                                                  const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(sellForm.payment_method))?.label?.toLowerCase() || '';
                                                   if (selectedLabel.includes('bank')) return a.account_type === 'bank';
                                                   if (selectedLabel.includes('cash')) return a.account_type === 'cash';
                                                   return true;
@@ -785,7 +811,7 @@ export default function Dashboard() {
                               </div>
                           )}
 
-                          {!loading && selectedType === 'buy' && (
+                          {!loadingDropdowns && selectedType === 'buy' && (
                               <div className="space-y-5">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
@@ -796,11 +822,11 @@ export default function Dashboard() {
                                         className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary"
                                     >
                                       <option value="">Select Supplier</option>
-                                      {(asArray(data?.suppliers)).map(s => (
+                                      {(asArray(dropdowns?.suppliers)).map(s => (
                                           <option key={s.id} value={s.id}>{s.name}</option>
                                       ))}
                                     </select>
-                                    {asArray(data?.suppliers).length === 0 && (
+                                    {asArray(dropdowns?.suppliers).length === 0 && (
                                       <p className="text-xs text-gray-500 mt-2">No suppliers found.</p>
                                     )}
                                   </div>
@@ -810,7 +836,7 @@ export default function Dashboard() {
                                     <select
                                         value={buyForm.item}
                                         onChange={(e) => {
-                                          const selectedItem = (data?.items ?? []).find(i => i.id === Number(e.target.value));
+                                          const selectedItem = (dropdowns?.items ?? []).find(i => i.id === Number(e.target.value));
                                           setBuyForm({
                                             ...buyForm,
                                             item: e.target.value,
@@ -820,11 +846,11 @@ export default function Dashboard() {
                                         className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary"
                                     >
                                       <option value="">Select Product</option>
-                                      {(asArray(data?.items)).map(item => (
+                                      {(asArray(dropdowns?.items)).map(item => (
                                           <option key={item.id} value={item.id}>{item.name || item.label || `Item ${item.id}`}</option>
                                       ))}
                                     </select>
-                                    {asArray(data?.items).length === 0 && (
+                                    {asArray(dropdowns?.items).length === 0 && (
                                       <p className="text-xs text-gray-500 mt-2">No products found.</p>
                                     )}
                                   </div>
@@ -852,7 +878,7 @@ export default function Dashboard() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
                                     <select value={buyForm.warehouse} onChange={e => setBuyForm({ ...buyForm, warehouse: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                       <option value="">Select Warehouse</option>
-                                      {(asArray(data?.warehouses)).map(w => (
+                                      {(asArray(dropdowns?.warehouses)).map(w => (
                                           <option key={w.id} value={w.id}>{w.name}</option>
                                       ))}
                                     </select>
@@ -875,7 +901,7 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                         <select value={buyForm.payment_method} onChange={e => setBuyForm({ ...buyForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                           <option value="">Select Method</option>
-                                          {(data?.paymentMethods || []).map(m => (
+                                          {(dropdowns?.paymentMethods || []).map(m => (
                                             <option key={m.id} value={m.code}>{m.label}</option>
                                           ))}
                                         </select>
@@ -885,10 +911,10 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
                                         <select value={buyForm.account} onChange={e => setBuyForm({ ...buyForm, account: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary" disabled={!buyForm.payment_method}>
                                           <option value="">Select Account</option>
-                                          {(asArray(data?.accounts))
+                                          {(asArray(dropdowns?.accounts))
                                               .filter(a => {
                                                   if (!buyForm.payment_method) return true;
-                                                  const selectedLabel = (data?.paymentMethods || []).find(m => String(m.code) === String(buyForm.payment_method))?.label?.toLowerCase() || '';
+                                                  const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(buyForm.payment_method))?.label?.toLowerCase() || '';
                                                   if (selectedLabel.includes('bank')) return a.account_type === 'bank';
                                                   if (selectedLabel.includes('cash')) return a.account_type === 'cash';
                                                   return true;
@@ -910,7 +936,7 @@ export default function Dashboard() {
                               </div>
                           )}
 
-                          {!loading && selectedType === 'expense' && (
+                          {!loadingDropdowns && selectedType === 'expense' && (
                               <div className="space-y-5">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
@@ -947,7 +973,7 @@ export default function Dashboard() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                     <select value={expenseForm.payment_method} onChange={e => setExpenseForm({ ...expenseForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                       <option value="">Select Method</option>
-                                      {(data?.paymentMethods || []).map(m => (
+                                      {(dropdowns?.paymentMethods || []).map(m => (
                                         <option key={m.id} value={m.code}>{m.label}</option>
                                       ))}
                                     </select>
@@ -957,10 +983,10 @@ export default function Dashboard() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
                                     <select value={expenseForm.account} onChange={e => setExpenseForm({ ...expenseForm, account: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary" disabled={!expenseForm.payment_method}>
                                       <option value="">Select Account</option>
-                                      {(asArray(data?.accounts))
+                                      {(asArray(dropdowns?.accounts))
                                           .filter(a => {
                                               if (!expenseForm.payment_method) return true;
-                                              const selectedLabel = (data?.paymentMethods || []).find(m => String(m.code) === String(expenseForm.payment_method))?.label?.toLowerCase() || '';
+                                              const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(expenseForm.payment_method))?.label?.toLowerCase() || '';
                                               if (selectedLabel.includes('bank')) return a.account_type === 'bank';
                                               if (selectedLabel.includes('cash')) return a.account_type === 'cash';
                                               return true;
@@ -1038,7 +1064,13 @@ export default function Dashboard() {
                                   submitMutator.mutate({ type: selectedType, payload })
                                 }
                               }}
-                              disabled={!selectedType || submitMutator.isPending}
+                              disabled={
+                                !selectedType ||
+                                submitMutator.isPending ||
+                                (selectedType === 'buy' && (!buyForm.supplier || !buyForm.item || !buyForm.quantity || !buyForm.unit_price || !buyForm.warehouse || ((buyForm.status === 'paid' || buyForm.status === 'partial') && (!buyForm.payment_method || !buyForm.account)))) ||
+                                (selectedType === 'sell' && (!sellForm.customer || !sellForm.item || !sellForm.quantity || !sellForm.unit_price || !sellForm.warehouse || ((sellForm.status === 'paid' || sellForm.status === 'partial') && (!sellForm.payment_method || !sellForm.account)))) ||
+                                (selectedType === 'expense' && (!expenseForm.category || !expenseForm.amount || !expenseForm.description || !expenseForm.payment_method || !expenseForm.account))
+                              }
                               className="px-5 py-2.5 !rounded-button whitespace-nowrap bg-primary font-medium text-white hover:bg-primary/95 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[120px]"
                           >
                             {submitMutator.isPending ? (
