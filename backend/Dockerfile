@@ -38,6 +38,6 @@ RUN SECRET_KEY=dummy-build-secret \
 RUN chmod +x entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uv", "run", "gunicorn", "habsify.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "2", "--log-level", "info"]
+CMD ["uv", "run", "gunicorn", "habsify.wsgi:application","--bind", "0.0.0.0:8000","--workers", "3","--threads", "2","--log-level", "debug","--access-logfile", "-","--error-logfile", "-"]
 
 EXPOSE 8000
