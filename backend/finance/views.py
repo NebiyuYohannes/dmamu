@@ -164,7 +164,9 @@ def cash_management(request):
             "date": t.date.strftime("%b %d, %Y • %I:%M %p"),
             "amount": t.amount,
             "type": t.type,
-            "balance": running_balance
+            # "balance": running_balance
+            "balance": t.balance_at_time
+
         })
 
     return Response({
