@@ -776,9 +776,8 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                         <select value={sellForm.payment_method} onChange={e => setSellForm({ ...sellForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                           <option value="">Select Method</option>
-                                          {(dropdowns?.paymentMethods || []).map(m => (
-                                            <option key={m.id} value={m.code}>{m.label}</option>
-                                          ))}
+                                          <option value="cash">Cash</option>
+                                          <option value="bank_transfer">Bank Transfer</option>
                                         </select>
                                       </div>
 
@@ -789,9 +788,8 @@ export default function Dashboard() {
                                           {(asArray(dropdowns?.accounts))
                                               .filter(a => {
                                                   if (!sellForm.payment_method) return true;
-                                                  const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(sellForm.payment_method))?.label?.toLowerCase() || '';
-                                                  if (selectedLabel.includes('bank')) return a.account_type === 'bank';
-                                                  if (selectedLabel.includes('cash')) return a.account_type === 'cash';
+                                                  if (sellForm.payment_method === 'bank_transfer') return a.account_type === 'bank';
+                                                  if (sellForm.payment_method === 'cash') return a.account_type === 'cash';
                                                   return true;
                                               })
                                               .map(a => (
@@ -901,9 +899,8 @@ export default function Dashboard() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                         <select value={buyForm.payment_method} onChange={e => setBuyForm({ ...buyForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                           <option value="">Select Method</option>
-                                          {(dropdowns?.paymentMethods || []).map(m => (
-                                            <option key={m.id} value={m.code}>{m.label}</option>
-                                          ))}
+                                          <option value="cash">Cash</option>
+                                          <option value="bank_transfer">Bank Transfer</option>
                                         </select>
                                       </div>
 
@@ -914,9 +911,8 @@ export default function Dashboard() {
                                           {(asArray(dropdowns?.accounts))
                                               .filter(a => {
                                                   if (!buyForm.payment_method) return true;
-                                                  const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(buyForm.payment_method))?.label?.toLowerCase() || '';
-                                                  if (selectedLabel.includes('bank')) return a.account_type === 'bank';
-                                                  if (selectedLabel.includes('cash')) return a.account_type === 'cash';
+                                                  if (buyForm.payment_method === 'bank_transfer') return a.account_type === 'bank';
+                                                  if (buyForm.payment_method === 'cash') return a.account_type === 'cash';
                                                   return true;
                                               })
                                               .map(a => (
@@ -973,9 +969,8 @@ export default function Dashboard() {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                                     <select value={expenseForm.payment_method} onChange={e => setExpenseForm({ ...expenseForm, payment_method: e.target.value, account: '' })} className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:border-primary">
                                       <option value="">Select Method</option>
-                                      {(dropdowns?.paymentMethods || []).map(m => (
-                                        <option key={m.id} value={m.code}>{m.label}</option>
-                                      ))}
+                                      <option value="cash">Cash</option>
+                                      <option value="bank_transfer">Bank Transfer</option>
                                     </select>
                                   </div>
 
@@ -986,9 +981,8 @@ export default function Dashboard() {
                                       {(asArray(dropdowns?.accounts))
                                           .filter(a => {
                                               if (!expenseForm.payment_method) return true;
-                                              const selectedLabel = (dropdowns?.paymentMethods || []).find(m => String(m.code) === String(expenseForm.payment_method))?.label?.toLowerCase() || '';
-                                              if (selectedLabel.includes('bank')) return a.account_type === 'bank';
-                                              if (selectedLabel.includes('cash')) return a.account_type === 'cash';
+                                              if (expenseForm.payment_method === 'bank_transfer') return a.account_type === 'bank';
+                                              if (expenseForm.payment_method === 'cash') return a.account_type === 'cash';
                                               return true;
                                           })
                                           .map(a => (
