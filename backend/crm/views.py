@@ -31,10 +31,13 @@ class CustomerViewSet(viewsets.ModelViewSet):
         qs = Customer.objects.select_related("company")
         if user.role != "super_admin":
             qs = qs.filter(company=user.company)
+
+        company_filter = Q(sales__company=user.company) if user.role != "super_admin" else Q()
+
         return qs.annotate(
-            products_count=Count('sales__item', distinct=True),
-            balance=Coalesce(Sum('sales__total'), Value(0, output_field=DecimalField())),
-            latest_sale=Max('sales__date')
+            products_count=Count('sales__item', distinct=True, filter=company_filter),
+            latest_sale=Max('sales__date', filter=company_filter),
+            balance=Coalesce(Sum('sales__total', filter=company_filter), Value(0, output_field=DecimalField())),
         )
 
     def retrieve(self, request, pk=None):

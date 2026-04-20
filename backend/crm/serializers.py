@@ -3,6 +3,10 @@ from sales_purchases.models import Sale
 from crm.limits import check_plan_limit
 from .models import Customer,Interaction
 from django.db.models import Sum
+from django.db.models import Sum, Q
+from finance.models import Transaction  
+
+
 
 
 class CustomerTransactionHistorySerializer(serializers.ModelSerializer):
@@ -61,15 +65,19 @@ class CustomerTransactionHistorySerializer(serializers.ModelSerializer):
         return ', '.join(set([t.account.name for t in payments if t.account])) if payments else "N/A"
     
     def get_remain(self, obj):
-        inflows = obj.transactions.filter(type='inflow').aggregate(Sum('amount'))['amount__sum'] or 0
-        outflows = obj.transactions.filter(type='outflow').aggregate(Sum('amount'))['amount__sum'] or 0
-        net_paid = inflows - outflows          
-        remain = obj.total - net_paid
-        return float(remain)
+        agg = obj.transactions.aggregate(  
+            inflows=Sum('amount', filter=Q(type='inflow')),
+            outflows=Sum('amount', filter=Q(type='outflow')),
+        )
+        inflows = agg['inflows'] or 0
+        outflows = agg['outflows'] or 0
+        net_paid = inflows - outflows
+        return float(obj.total - net_paid)
 
 
 class CustomerSerializer(serializers.ModelSerializer):
     products_count = serializers.SerializerMethodField()
+    balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -79,27 +87,53 @@ class CustomerSerializer(serializers.ModelSerializer):
             'phone',
             'address',
             'products_count',
+            'balance',
             'notes',
         ]
 
     def validate(self, attrs):
         if self.instance: 
             return attrs
-
         company = self.context["request"].user.company
         check_plan_limit(company)
-
         return attrs
 
     def get_products_count(self, obj):
-        return obj.sales.values('item').distinct().count()
+        if not obj.company:
+            return 0
+        return obj.sales.filter(company=obj.company).values('item').distinct().count()
 
-    
+    def get_balance(self, obj):
+        sales_qs = obj.sales.filter(company=obj.company)
+
+        total_payable = sales_qs.aggregate(
+            total=Sum('total')
+        )['total'] or 0
+
+        sale_ids = sales_qs.values_list('id', flat=True)
+
+        transaction_agg = Transaction.objects.filter(
+            linked_sale__in=sale_ids
+        ).aggregate(
+            inflows=Sum('amount', filter=Q(type='inflow')),
+            outflows=Sum('amount', filter=Q(type='outflow')),
+        )
+
+        inflows = transaction_agg['inflows'] or 0
+        outflows = transaction_agg['outflows'] or 0
+
+        net_paid = inflows - outflows
+        balance = total_payable - net_paid
+
+        return float(balance)  
+
+
 class InteractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Interaction
         fields = '__all__'
         read_only_fields = ['customer', 'created_by', 'date']
+
 
 class CustomerDropdownSerializer(serializers.ModelSerializer):
     label = serializers.SerializerMethodField() 
@@ -111,3 +145,5 @@ class CustomerDropdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = ["id","label"]
+
+        
