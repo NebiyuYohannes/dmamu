@@ -160,8 +160,17 @@ export default function Dashboard() {
       setBuyForm({ supplier: '', item: '', quantity: '', unit_price: '', warehouse: '', status: 'unpaid', payment_method: '', account: '', notes: '' })
       setSellForm({ customer: '', item: '', quantity: '', unit_price: '', warehouse: '', status: 'unpaid', payment_method: '', account: '', notes: '' })
       setExpenseForm({ category: '', amount: '', description: '', payment_method: '', account: '' })
-      // Automatically triggers Dashboard refetch to instantly update numbers without manual reloads
+
+      // Force aggressive invalidation across all domains impacted by this global transaction
       queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['cashSummary'] })
+      queryClient.invalidateQueries({ queryKey: ['financeStats'] })
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['crmCustomers'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
+      queryClient.invalidateQueries({ queryKey: ['stockMovements'] })
     },
     onError: () => {
       // toastError('Failed to record transaction')

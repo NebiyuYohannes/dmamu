@@ -128,6 +128,8 @@ export default function Inventory() {
     toast.success(`Warehouse ${editingWarehouse ? 'updated' : 'added'} successfully`)
     queryClient.invalidateQueries({ queryKey: ['warehouses'] })
     queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+    queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
     closeModal()
   },
     onError: (err, newWarehouse, context) => {
@@ -143,6 +145,9 @@ export default function Inventory() {
     onSuccess: () => {
       toast.success('Warehouse successfully deleted')
       queryClient.invalidateQueries({ queryKey: ['warehouses'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
     },
     onError: () => toast.error('Failed to delete warehouse')
   })

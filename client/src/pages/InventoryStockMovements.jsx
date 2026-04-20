@@ -130,51 +130,16 @@ export default function InventoryStockMovements() {
 
   // Creation Mutation mapped natively out of legacy arrays
   const createMutator = useMutation({
-    mutationFn: async (payload) => {
-      const submitData = {
-        ...payload,
-        inventory: Number(payload.inventory),
-        purchase: payload.purchase ? Number(payload.purchase) : null,
-        sale: payload.sale ? Number(payload.sale) : null
-      }
-      return createStockMovement(submitData)
+    mutationFn: async (payload) => createStockMovement(payload),
+    onSuccess: () => {
+      toast.success('Stock movement created successfully')
+      queryClient.invalidateQueries({ queryKey: ['inventoryMovements'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] })
+      closeModal()
     },
-    onMutate: async (newMovement) => {
-      await queryClient.cancelQueries({ queryKey: ['stockMovements'] })
-      const previous = queryClient.getQueryData(['stockMovements', page, debouncedSearch, ordering])
-      const tempId = `temp-${Date.now()}`
-
-      // Look up visual data
-      const selected = inventoryOptions.find(opt => String(opt.id) === String(newMovement.inventory))
-
-      queryClient.setQueryData(['stockMovements', page, debouncedSearch, ordering], (old) => {
-        if (!old) return old
-        const updatedList = [{
-          id: tempId,
-          movement_type: newMovement.movement_type,
-          item_name: selected?.item_name || '',
-          warehouse_name: selected?.warehouse_name || '',
-          reference: selected?.reference || '',
-          quantity: newMovement.quantity,
-          date: new Date().toISOString(),
-          isOptimistic: true
-        }, ...(old.results || old)]
-        return { ...old, results: updatedList }
-      })
-      return { previous }
-    },
-onSuccess: () => {
-  toast.success('Movement recorded successfully')
-  queryClient.invalidateQueries({ queryKey: ['stockMovements'] })
-  queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
-  closeModal()
-},
-    onError: (err, newMovement, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['stockMovements', page, debouncedSearch, ordering], context.previous)
-      }
-      toast.error('Failed to create movement')
-    }
+    onError: () => toast.error('Failed to create stock movement')
   })
 
   // Handlers

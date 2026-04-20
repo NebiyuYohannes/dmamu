@@ -108,6 +108,7 @@ export default function InventoryCategories() {
     toast.success(`Category ${editingCategory ? 'updated' : 'created'} successfully`)
     queryClient.invalidateQueries({ queryKey: ['inventoryCategories'] })
     queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+    queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
     closeModal()
   },
     onError: (err, newCategory, context) => {
@@ -123,6 +124,8 @@ export default function InventoryCategories() {
     onSuccess: () => {
       toast.success('Category deleted')
       queryClient.invalidateQueries({ queryKey: ['inventoryCategories'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
     },
     onError: () => toast.error('Failed to delete category')
   })

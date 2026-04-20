@@ -116,12 +116,14 @@ export default function CRM() {
       if (editingCustomer) return updateCustomer(editingCustomer.id, payload)
       return createCustomer(payload)
     },
-  onSuccess: () => {
-    toast.success(`Customer ${editingCustomer ? 'updated' : 'added'} successfully`)
-    queryClient.invalidateQueries({ queryKey: ['crmCustomers'] }) // Smart self-healing UI
-    queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
-    handleCloseModal()
-  },
+    onSuccess: () => {
+      toast.success(`Customer ${editingCustomer ? 'updated' : 'added'} successfully`)
+      queryClient.invalidateQueries({ queryKey: ['crmCustomers'] }) // Smart self-healing UI
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
+      handleCloseModal()
+    },
     onError: () => toast.error('Check your form fields or network connection')
   })
 
@@ -130,6 +132,9 @@ export default function CRM() {
     onSuccess: () => {
       toast.success('Customer permanently deleted')
       queryClient.invalidateQueries({ queryKey: ['crmCustomers'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
     }
   })
 

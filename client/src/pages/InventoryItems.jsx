@@ -139,46 +139,36 @@ export default function InventoryItems() {
   // PHASE 38 Continued: Mutation hooks with invalidations automatically healing cache anomalies
   const saveMutator = useMutation({
     mutationFn: async (payload) => {
-      // transform standard data cleanly
-      const submitData = {
-        ...payload,
+      const dataToSubmit = {
+        name: payload.name,
+        code: payload.code,
         category: payload.category ? Number(payload.category) : null,
-        unit_price: payload.unit_price != null ? Number(payload.unit_price) : null
+        unit_price: payload.unit_price,
+        unit_measure: payload.unit_measure
       }
-      if (editingItem) return updateItem(editingItem.id, submitData)
-      return createItem(submitData)
+      if (editingItem) return updateItem(editingItem.id, dataToSubmit)
+      return createItem(dataToSubmit)
     },
-    onMutate: async (newItem) => {
-      if (editingItem) return
-      await queryClient.cancelQueries({ queryKey: ['inventoryItems'] })
-      const previous = queryClient.getQueryData(['inventoryItems', page, debouncedSearch, ordering, categoryFilter])
-      const tempId = `temp-${Date.now()}`
-      queryClient.setQueryData(['inventoryItems', page, debouncedSearch, ordering, categoryFilter], (old) => {
-        if (!old) return old
-        const updatedList = [{ id: tempId, ...newItem, isOptimistic: true }, ...(old.results || old)]
-        return { ...old, results: updatedList }
-      })
-      return { previous }
+    onSuccess: () => {
+      toast.success(`Item ${editingItem ? 'updated' : 'added'} successfully`)
+      queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
+      closeModal()
     },
-onSuccess: () => {
-  toast.success(`Item ${editingItem ? 'updated' : 'created'} successfully`)
-  queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
-  queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
-  closeModal()
-},
-    onError: (err, newItem, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['inventoryItems', page, debouncedSearch, ordering, categoryFilter], context.previous)
-      }
-      toast.error(`Failed to ${editingItem ? 'update' : 'create'} item`)
-    }
+    onError: () => toast.error('Check your form fields or network connection')
   })
 
+  // Delete Mutator
   const deleteMutator = useMutation({
     mutationFn: async (id) => deleteItem(id),
     onSuccess: () => {
       toast.success('Item deleted successfully')
       queryClient.invalidateQueries({ queryKey: ['inventoryItems'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
     },
     onError: () => toast.error('Failed to delete item')
   })

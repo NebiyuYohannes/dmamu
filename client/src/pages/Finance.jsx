@@ -125,6 +125,44 @@ export default function Finance() {
     onError: () => toast.error('Failed to update account')
   })
 
+  const saveAccountMutator = useMutation({
+    mutationFn: async (payload) => {
+      if (editingAccount && editingAccount.id) {
+        return updateAccount(editingAccount.id, payload)
+      }
+      return createAccount(payload)
+    },
+    onSuccess: () => {
+      toast.success(editingAccount ? 'Account updated successfully' : 'Account created successfully')
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] })
+      queryClient.invalidateQueries({ queryKey: ['financeStats'] })
+      queryClient.invalidateQueries({ queryKey: ['cashSummary'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      closeModal()
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to save account')
+    }
+  })
+
+  const deleteAccountMutator = useMutation({
+    mutationFn: async (id) => deleteAccount(id),
+    onSuccess: () => {
+      toast.success('Account deleted successfully')
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] })
+      queryClient.invalidateQueries({ queryKey: ['financeStats'] })
+      queryClient.invalidateQueries({ queryKey: ['cashSummary'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardDropdowns'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete account')
+    }
+  })
+
   function openAddAccount() {
     setEditingAccount(null)
     setAccountModalOpen(true)
