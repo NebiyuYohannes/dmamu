@@ -13,8 +13,10 @@ import { cn } from '../utils/cn'
 import { Search, Filter, ArrowUpDown, ChevronLeft, ChevronRight, Edit2, Trash2, Phone, MapPin, Package, DollarSign, X } from 'lucide-react'
 
 function formatCurrency(v) {
-  const sign = v < 0 ? '-' : ''
-  return sign + '$' + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (!v) return '$0.00'
+  const numV = Number(v)
+  const sign = numV < 0 ? '-' : '+'
+  return sign + '$' + Math.abs(numV).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // PHASE 17 & 18: Professional Zod schemas injected for CRM
@@ -257,7 +259,9 @@ export default function CRM() {
                           <td className="py-3 px-4"><p className="text-sm text-gray-900">{c.address}</p></td>
                           <td className="py-3 px-4"><p className="text-sm text-gray-900">{c.products}</p></td>
                           <td className="py-3 px-4">
-                            <p className={"font-semibold " + (c.balance >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(c.balance)}</p>
+                            <p className={cn("font-semibold", !c.balance ? "text-gray-500" : c.balance > 0 ? "text-green-600" : "text-red-600")}>
+                              {formatCurrency(c.balance)}
+                            </p>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
@@ -292,8 +296,10 @@ export default function CRM() {
                           <div className="text-sm text-gray-900 mt-1">{c.address}</div>
                         </div>
                         <div className="text-right">
-                          <p className={"font-semibold " + (c.balance >= 0 ? 'text-green-600' : 'text-red-600')}>{formatCurrency(c.balance)}</p>
-                          <p className="text-sm text-gray-900 mt-1">{c.products}</p>
+                          <p className={cn("font-semibold", !c.balance ? "text-gray-500" : c.balance > 0 ? "text-green-600" : "text-red-600")}>
+                            {formatCurrency(c.balance)}
+                          </p>
+                          <p className="text-sm text-gray-900 mt-1">{c.products} Products</p>
                           <div className="mt-3 flex gap-2 justify-end">
                             <button onClick={() => navigate(`/crm/customer/${c.id}`)} className="px-3 py-2 bg-white border border-gray-200 text-sm rounded-lg text-gray-700 hover:bg-gray-50">View</button>
                             <button onClick={(ev)=>{ ev.stopPropagation(); setEditingCustomer(c); setIsModalOpen(true)}} className="px-3 py-2 bg-white border border-gray-200 text-sm rounded-lg text-gray-700 hover:bg-gray-50">Edit</button>
