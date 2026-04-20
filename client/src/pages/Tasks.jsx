@@ -44,6 +44,9 @@ function formatDateInput(date) {
 
 function parseDate(dateStr) {
   if (!dateStr) return null
+  if (dateStr.includes('T')) {
+    return new Date(dateStr)
+  }
   const [year, month, day] = dateStr.split('-').map(Number)
   return new Date(year, month - 1, day)
 }
@@ -84,11 +87,15 @@ function getPriorityStyle(priority) {
 }
 
 function formatDueLabel(task) {
-  if (task.completed && task.completedAt) {
-    return `Completed ${formatRelativeDate(task.completedAt)}`
+  const dueDateStr = task.due_date || task.dueDate
+  const completedAtStr = task.completed_at || task.completedAt
+
+  const formattedDueDate = dueDateStr ? formatRelativeDate(dueDateStr) : 'No due date'
+
+  if (task.completed && completedAtStr) {
+    return `Completed: ${formatRelativeDate(completedAtStr)} (Due: ${formattedDueDate})`
   }
-  if (!task.dueDate) return 'No due date'
-  return `Due: ${formatRelativeDate(task.dueDate)}`
+  return `Due: ${formattedDueDate}`
 }
 
 function formatRelativeDate(dateStr) {
@@ -105,7 +112,7 @@ function formatRelativeDate(dateStr) {
   if (diff > 1 && diff < 7) {
     return date.toLocaleDateString('en-US', { weekday: 'long' })
   }
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 export default function Tasks() {
