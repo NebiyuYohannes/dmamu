@@ -91,6 +91,12 @@ export default function FinanceTable() {
     onSuccess: () => {
       toast.success('Transaction saved')
       queryClient.invalidateQueries({ queryKey: ['cashSummary'] })
+      queryClient.invalidateQueries({ queryKey: ['financeMetadata'] })
+      queryClient.invalidateQueries({ queryKey: ['financeStats'] })
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] })
+      queryClient.invalidateQueries({ queryKey: ['crmCustomers'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
       closeModal()
     },
     onError: () => toast.error('Failed to save transaction')
