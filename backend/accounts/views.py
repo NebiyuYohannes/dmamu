@@ -1,3 +1,5 @@
+from urllib import request
+
 from django.contrib.auth.tokens import default_token_generator
 from djoser.utils import decode_uid,encode_uid
 from rest_framework_simplejwt.exceptions import TokenError
@@ -152,17 +154,20 @@ class AuthViewSet(GenericViewSet):
     @action(detail=False, methods=['post'], url_path='logout', permission_classes=[IsAuthenticated])
     def logout(self, request):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True) 
+        serializer.is_valid(raise_exception=True)
+
+        refresh_token = serializer.validated_data['refresh']
 
         try:
-            token = RefreshToken(serializer.validated_data['refresh'])
-            token.blacklist() 
-
-            return Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
+            token = RefreshToken(refresh_token)
+            token.blacklist()
         except TokenError:
-            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+            pass
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"detail": "Successfully logged out"}, status=status.HTTP_200_OK)
+    
 
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
