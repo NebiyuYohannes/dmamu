@@ -1,10 +1,8 @@
 import os
 from celery import Celery
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'habsify.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "habsify.settings.dev")
 
-app = Celery('habsify')
-
-app.config_from_object('django.conf:settings', namespace='CELERY')
-
-app.autodiscover_tasks()  
+app = Celery("habsify")
+app.config_from_object("django.conf:settings", namespace="CELERY")
+app.autodiscover_tasks()
