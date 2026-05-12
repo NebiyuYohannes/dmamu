@@ -1,3 +1,4 @@
 release: python manage.py migrate
-web: gunicorn habsify.wsgi:application
-worker: celery -A habsify worker
+web: gunicorn habsify.wsgi:application --workers 2 --threads 2 --timeout 120 --access-logfile - --error-logfile -
+worker: celery -A habsify worker --loglevel=info --pool=threads
+beat: celery -A habsify beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
