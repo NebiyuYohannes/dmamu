@@ -1,7 +1,63 @@
+# Git
 .git
-.venv
+.gitignore
+.gitattributes
+
+# Python
 __pycache__
 *.pyc
 *.pyo
-*.egg-info
+*.pyd
+.Python
+*.so
 .pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv
+venv
+env
+
+# Environment files (NEVER copy secrets into images!)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+*.log
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Tests
+.tox
+.nox
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Misc
+node_modules
+.npm
+.cache
