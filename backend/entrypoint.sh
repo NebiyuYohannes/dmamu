@@ -4,46 +4,64 @@ set -e
 echo "🚀 Starting habsify backend..."
 
 # ======================
+# Detect Python Runner
+# ======================
+if command -v uv >/dev/null 2>&1; then
+  RUN="uv run"
+  echo "→ Using uv"
+else
+  RUN=""
+  echo "→ Using system python"
+fi
+
+# ======================
 # Wait for Database
 # ======================
 echo "→ Waiting for database..."
-while ! uv run python -c "
-import os, time
+MAX_RETRIES=30
+RETRIES=0
+
+until $RUN python -c "
+import django
+django.setup()
 from django.db import connection
-from django.db.utils import OperationalError
-try:
-    connection.ensure_connection()
-    print('✅ Database is ready!')
-except OperationalError:
-    print('⏳ Database not ready yet...')
-    exit(1)
-" 2>/dev/null; do
-  echo "Waiting for database... (5s)"
-  sleep 5
+connection.ensure_connection()
+" >/dev/null 2>&1; do
+  RETRIES=$((RETRIES + 1))
+  if [ $RETRIES -ge $MAX_RETRIES ]; then
+    echo "❌ Database connection failed after $MAX_RETRIES attempts."
+    exit 1
+  fi
+  echo "⏳ DB not ready (attempt $RETRIES/$MAX_RETRIES)..."
+  sleep 2
 done
+echo "✅ Database is ready!"
 
 # ======================
 # Run Migrations
 # ======================
 echo "→ Running migrations..."
-uv run python manage.py migrate --noinput
+$RUN python manage.py migrate --noinput
 
 # ======================
-# Collect Static Files
+# Collect Static Files (Production only)
 # ======================
-echo "→ Collecting static files..."
-uv run python manage.py collectstatic --noinput
+if [ "$DEBUG" != "True" ]; then
+  echo "→ Collecting static files..."
+  $RUN python manage.py collectstatic --noinput --clear
+fi
 
 # ======================
-# Create Superuser (optional)
+# Create Superuser if Environment Variables are Set
 # ======================
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_EMAIL" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
-  echo "→ Creating superuser (if not exists)..."
-  uv run python manage.py createsuperuser --noinput 2>/dev/null || true
+  echo "→ Creating superuser if not exists..."
+  $RUN python manage.py createsuperuser --noinput 2>/dev/null \
+    || echo "ℹ️  Superuser already exists, skipping."
 fi
 
 # ======================
 # Start Application
 # ======================
-echo "→ Starting: $*"
+echo "✅ Initialization complete. Starting: $*"
 exec "$@"
