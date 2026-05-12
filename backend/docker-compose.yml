@@ -1,29 +1,95 @@
 services:
+  db:
+    image: postgres:15
+    container_name: habsify_db
+    environment:
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: habsify_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_user -d habsify_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: habsify_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   web:
     build: .
     container_name: habsify_backend
     env_file:
-      - .env.pro
+      - .env.dev
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app                          # Hot reload
+      - /app/.venv                      # Don't override venv from container
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    # Override Dockerfile CMD for dev to enable hot reload and wait for dependencies
+    command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
-    entrypoint: ["/app/entrypoint.sh"]
-    command: ["uv", "run", "gunicorn", "habsify.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "2", "--log-level", "info"]
 
   celery_worker:
     build: .
     container_name: habsify_celery_worker
     env_file:
-      - .env.pro
-    entrypoint: ["/app/entrypoint.sh"]
+      - .env.dev
+    volumes:
+      - .:/app
+      - /app/.venv
     command: ["uv", "run", "celery", "-A", "habsify", "worker", "-l", "info", "--pool=threads"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
     restart: unless-stopped
 
   celery_beat:
     build: .
     container_name: habsify_celery_beat
     env_file:
-      - .env.pro
-    entrypoint: ["/app/entrypoint.sh"]
-    command: ["uv", "run", "celery", "-A", "habsify", "beat", "-l", "info"]
+      - .env.dev
+    volumes:
+      - .:/app
+      - /app/.venv
+    command: ["uv", "run", "celery", "-A", "habsify", "beat", "-l", "info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: habsify_postgres_data
+  static_volume:
+    name: habsify_static_volume
+  media_volume:
+    name: habsify_media_volume
