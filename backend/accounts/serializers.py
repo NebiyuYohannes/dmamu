@@ -16,6 +16,7 @@ from rest_framework import status
 from .utils import create_otp_for_user, send_otp_to_phone, normalize_phone, send_activation_email, send_otp_email
 from .models import User, PhoneNumber, OTPCode,Profile
 from .validators import validate_unique_email, validate_unique_username
+from .verification import send_user_verification
 from django.contrib.auth import authenticate
 from subscriptions.models import Subscription
 from datetime import timedelta
@@ -111,30 +112,53 @@ class CreatePasswordRetypeSerializer(BaseUserCreatePasswordRetypeSerializer):
     def create(self, validated_data):
         company_data = self.company_data
         phone_data = self.phone_data
+        request = self.context.get("request")
+
         with transaction.atomic():
-            validated_data['verification_method'] = User.VERIFICATION_PHONE if phone_data else User.VERIFICATION_EMAIL
-            validated_data['is_active'] = False
+            # verification_method = (
+            #     User.VERIFICATION_PHONE
+            #     if phone_data and phone_data.get("number")
+            #     else User.VERIFICATION_EMAIL
+            # )
+            verification_method = User.VERIFICATION_EMAIL
+
+            validated_data.update({
+                "verification_method": verification_method,
+                "is_active": False,
+            })
 
             user = super().create(validated_data)
-            if phone_data and phone_data['number']:
-                PhoneNumber.objects.create(user=user, number=phone_data['number'])
-                try:
-                    otp, _ = create_otp_for_user(user, OTPCode.TYPE_SMS, purpose=OTPCode.PURPOSE_SIGNUP)
-                    send_otp_to_phone(phone=phone_data['number'], otp_code=otp)
-                except ValueError as e:
-                    raise serializers.ValidationError({"detail": "Failed to send OTP."})
-            else:
-                try:
-                    send_activation_email(user, request=self.context.get("request"))
-                except Exception as e:
-                    raise serializers.ValidationError({"detail": "Failed to send activation email."})
-            if company_data and company_data.get('name'):
+
+            # Create phone record if exists
+            phone_number = None
+            if phone_data and phone_data.get("number"):
+                phone_number = PhoneNumber.objects.create(
+                    user=user,
+                    number=phone_data["number"]
+                )
+
+            # ✅ Send verification (single call)
+            try:
+                send_user_verification(
+                    user=user,
+                    method=verification_method,
+                    phone=phone_number.number if phone_number else None,
+                    request=request,
+                )
+            except Exception:
+                raise serializers.ValidationError(
+                    {"detail": "Failed to send verification."}
+                )
+
+            # Create company
+            if company_data and company_data.get("name"):
                 company = Company.objects.create(
-                    name=company_data['name'],
+                    name=company_data["name"],
                     owner=user
                 )
                 user.company = company
-                user.save(update_fields=['company'])
+                user.save(update_fields=["company"])
+
         return user
 
 class OTPVerifySerializer(serializers.Serializer):
