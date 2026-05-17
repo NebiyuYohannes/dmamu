@@ -57,15 +57,27 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                   'active', 'days_remaining', 'status','members_usage', 'plan']
         read_only_fields = ['uid', 'company_name', 'active', 'start_date', 'end_date']
 
+
 class FreeTrialSerializer(serializers.Serializer):
     plan_id = serializers.IntegerField()
 
     def validate(self, data):
-        company = self.context['request'].user.company
-        if company.has_used_trial:
+        request = self.context.get('request')
+        user = request.user
+
+        if not user.is_authenticated:
+            raise serializers.ValidationError("Authentication required.")
+
+        if not hasattr(user, 'company') or not user.company:
+            raise serializers.ValidationError("User has no associated company.")
+
+        company = user.company
+
+        if getattr(company, 'has_used_trial', False):
             raise serializers.ValidationError(
-                "This company has already used its free trial on a previous plan."
+                "This company has already used its free trial."
             )
+
         return data
 
     def create(self, validated_data):
@@ -80,7 +92,7 @@ class FreeTrialSerializer(serializers.Serializer):
             else:
                 start_date = timezone.now().date()
 
-            subscription, created = Subscription.objects.update_or_create(
+            subscription, _ = Subscription.objects.update_or_create(
                 company=company,
                 defaults={
                     'plan': plan,
