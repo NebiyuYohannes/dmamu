@@ -10,7 +10,8 @@ from rest_framework import status
 from django.core.cache import cache
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.parsers import MultiPartParser, FormParser
-
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from .models import Feature, SubscriptionPlan,Subscription,Payment,PaymentMethod,BankAccount
 from crm.permissions import HasActiveSubscription 
 from .permissions import IsOwnerOrAdmin,HasValidSubscription
@@ -77,6 +78,7 @@ class SubscriptionViewSet(mixins.ListModelMixin,
             return super().get_queryset()
         return Subscription.objects.filter(company=self.request.user.company)
 
+    @method_decorator(csrf_exempt, name='dispatch')
     @action(detail=False, methods=['post'], serializer_class=FreeTrialSerializer)
     def free_trial(self, request):
         serializer = self.get_serializer(data=request.data)
