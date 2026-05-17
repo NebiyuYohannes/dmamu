@@ -1,6 +1,7 @@
 from django.db import models, transaction
 from core.models import Company
 
+
 class Account(models.Model):
     TYPE_CHOICES = [
         ('cash', 'Cash on Hand'),
@@ -8,28 +9,41 @@ class Account(models.Model):
     ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='accounts')
-    name = models.CharField(max_length=100)  
-    full_name = models.CharField(max_length=255)  
-    account_type = models.CharField(max_length=10, choices=TYPE_CHOICES,default='bank')
-    account_number = models.CharField(max_length=50, blank=True) 
-    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00) 
+    name = models.CharField(max_length=100)
+    full_name = models.CharField(max_length=255)
+    account_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default='bank')
+    account_number = models.CharField(max_length=50, blank=True)
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} ({self.get_account_type_display()}) - Balance: {self.balance}"
 
+
 class Transaction(models.Model):
     TYPE_CHOICES = [
-        ('inflow', 'Inflow (Income)'),
-        ('outflow', 'Outflow (Expense)'),
+        # Profit types (inflows)
+        ('revenue',    'Revenue (Sale)'),
+        ('refund_in',  'Refund from Supplier'),
+        # Profit types (outflows)
+        ('cogs',       'Cost of Goods (Purchase)'),
+        ('expense',    'Business Expense'),
+        ('refund_out', 'Refund to Customer'),
+        # Non-profit types
+        ('capital',    'Capital / Owner Deposit'),
     ]
+
+    INFLOW_TYPES  = ['revenue', 'refund_in', 'capital']
+    OUTFLOW_TYPES = ['cogs', 'expense', 'refund_out']
+    PROFIT_IN     = ['revenue', 'refund_in']
+    PROFIT_OUT    = ['cogs', 'expense', 'refund_out']
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='transactions')
     account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, related_name='transactions')
-    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES) 
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    description = models.CharField(max_length=255)  
-    reference = models.CharField(max_length=100, blank=True) 
+    description = models.CharField(max_length=255)
+    reference = models.CharField(max_length=100, blank=True)
     date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
     balance_at_time = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -38,7 +52,7 @@ class Transaction(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='transactions' 
+        related_name='transactions'
     )
     linked_purchase = models.ForeignKey(
         'sales_purchases.Purchase',
@@ -47,19 +61,19 @@ class Transaction(models.Model):
         on_delete=models.SET_NULL,
         related_name='transactions'
     )
-    category = models.CharField(max_length=100, blank=True, null=True)        
+    category = models.CharField(max_length=100, blank=True, null=True)
     payment_method = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return f"{self.get_type_display()} {self.amount} on {self.date} - {self.description}"
-    
+
     def save(self, *args, **kwargs):
         if self.account:
             current_balance = self.account.balance
 
-            if self.type == 'inflow':
+            if self.type in self.INFLOW_TYPES:
                 new_balance = current_balance + self.amount
-            elif self.type == 'outflow':
+            elif self.type in self.OUTFLOW_TYPES:
                 new_balance = current_balance - self.amount
             else:
                 raise ValueError(f"Unknown transaction type: {self.type}")
@@ -67,9 +81,11 @@ class Transaction(models.Model):
             self.balance_at_time = new_balance
             self.account.balance = new_balance
             self.account.save(update_fields=['balance'])
+
         with transaction.atomic():
             super().save(*args, **kwargs)
             if self.linked_sale:
                 self.linked_sale.update_status()
             if self.linked_purchase:
                 self.linked_purchase.update_status()
+                
