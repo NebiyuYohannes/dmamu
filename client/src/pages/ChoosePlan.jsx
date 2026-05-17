@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { getSubscriptionPlans, startFreeTrial, getPaymentMethods, getBankAccounts, subscribeAndPay } from '../services/subscriptionService'
 import toast from '../services/toastService'
-import api from '../services/api'  
+import api, { setGlobalAccessStatus } from '../services/api' 
 
 export default function ChoosePlan() {
   const { user } = useAuth()
@@ -51,35 +51,53 @@ export default function ChoosePlan() {
   }, [payModalOpen])
 
 const redirectToDashboard = async () => {
-  await queryClient.fetchQuery({ 
-    queryKey: ['accessStatus'],
-    queryFn: async () => {
-      const res = await api.get('/subscriptions/me/access-status/')
-      return res.data
+  try {
+    // Force fresh data from backend and update both React Query + global state
+    const freshData = await queryClient.fetchQuery({
+      queryKey: ['accessStatus'],
+      queryFn: async () => {
+        const res = await api.get('/subscriptions/me/access-status/')
+        setGlobalAccessStatus(res.data)     // Update global state used by ProtectedRoute
+        return res.data
+      },
+      staleTime: 0,                         // Force real network call
+    })
+
+    // Only navigate if we truly have access now
+    if (freshData?.can_enter_app === true) {
+      navigate('/dashboard', { replace: true })
+    } else {
+      toast.error("Trial started but access not granted yet. Please refresh.")
     }
-  })
-  navigate('/dashboard', { replace: true })
+  } catch (err) {
+    console.error("Access status fetch failed:", err)
+    // Fallback - still navigate (ProtectedRoute will handle it)
+    navigate('/dashboard', { replace: true })
+  }
 }
 
 const handleStartTrial = async (planId) => {
   setProcessing(planId)
+
   try {
     await startFreeTrial(planId)
-    toast.success('Trial started successfully!')
+    toast.success('Trial started successfully! 🎉')
+    
     await redirectToDashboard()
   } catch (err) {
-    const status = err?.response?.status
-    const detail = err?.response?.data?.detail || ''
+    const detail = err?.response?.data?.detail || err?.response?.data?.error || ''
 
-    // Only redirect if specifically "already used trial"
-    if (status === 400 && detail.toLowerCase().includes('already used')) {
-      toast.info('You already have an active subscription')
+    if (detail.toLowerCase().includes('already used') || detail.toLowerCase().includes('already')) {
+      toast.info('You have already used your free trial')
       await redirectToDashboard()
-    } else if (status === 401) {
-      toast.error('Session expired. Please log in again.')
+    } else if (err?.response?.status === 400) {
+      toast.error(detail || 'Invalid request')
+    } else if (err?.response?.status === 401) {
+      toast.error('Session expired. Please login again.')
       navigate('/login', { replace: true })
     } else {
       toast.error('Failed to start trial. Please try again.')
+      console.error(err)
     }
   } finally {
     setProcessing(null)
