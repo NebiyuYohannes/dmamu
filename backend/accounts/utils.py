@@ -90,6 +90,10 @@ def send_activation_email(user, request=None):
 
 def send_otp_email(user, otp_code, purpose, request=None):
     """Send OTP via email (synchronous)."""
+    if not user.email:
+        logger.error("User has no email address")
+        return False
+
     context = {
         "user": user,
         "code": otp_code,
@@ -100,7 +104,12 @@ def send_otp_email(user, otp_code, purpose, request=None):
     subject = f"Your {purpose.capitalize()} Verification Code"
 
     text_body = f"Your verification code is {otp_code}. It expires in {context['minutes']} minutes."
-    html_body = render_to_string("emails/otp_email.html", context)
+    
+    try:
+        html_body = render_to_string("emails/otp_email.html", context)
+    except Exception as e:
+        logger.error(f"Failed to render OTP email template: {e}")
+        html_body = text_body 
 
     email = EmailMultiAlternatives(
         subject=subject,
@@ -109,11 +118,13 @@ def send_otp_email(user, otp_code, purpose, request=None):
         to=[user.email],
     )
     email.attach_alternative(html_body, "text/html")
+
     try:
-        email.send()
-        logger.info(f"OTP email sent to {user.email}")
+        email.send(fail_silently=False)
+        logger.info(f"OTP email sent successfully to {user.email} for {purpose}")
+        return True
     except Exception as e:
-        logger.error(f"Failed to send OTP email to {user.email}: {e}")
+        logger.error(f"Failed to send OTP email to {user.email}: {e}", exc_info=True)
         raise
 
 
