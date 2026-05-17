@@ -54,13 +54,11 @@ export default function ChoosePlan() {
     try {
       await startFreeTrial(planId)
       toast.success('Trial started successfully!')
-      await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
-      navigate('/dashboard')
+      window.location.href = '/dashboard'
     } catch (err) {
       if (err?.response?.status === 400 || err?.response?.data?.detail?.includes('already')) {
         toast.success('Moving to dashboard...')
-        await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
-        navigate('/dashboard')
+        window.location.href = '/dashboard'
       } else {
         toast.error('Failed to start trial. Please try again.')
       }
@@ -92,8 +90,7 @@ export default function ChoosePlan() {
       })
       toast.success('Subscription request sent')
       setPayModalOpen(false)
-      queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
-      navigate('/dashboard')
+      window.location.href = '/dashboard'
     } catch (err) {
       // global error handler covers toast
     } finally {
