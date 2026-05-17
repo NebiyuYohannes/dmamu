@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { getSubscriptionPlans, startFreeTrial, getPaymentMethods, getBankAccounts, subscribeAndPay } from '../services/subscriptionService'
 import toast from '../services/toastService'
@@ -7,6 +8,7 @@ import toast from '../services/toastService'
 export default function ChoosePlan() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [plans, setPlans] = useState([])
   const [paymentMethods, setPaymentMethods] = useState([])
   const [bankAccounts, setBankAccounts] = useState([])
@@ -52,11 +54,13 @@ export default function ChoosePlan() {
     try {
       await startFreeTrial(planId)
       toast.success('Trial started successfully!')
-      window.location.href = '/dashboard'
+      await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
+      navigate('/dashboard')
     } catch (err) {
       if (err?.response?.status === 400 || err?.response?.data?.detail?.includes('already')) {
         toast.success('Moving to dashboard...')
-        window.location.href = '/dashboard'
+        await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
+        navigate('/dashboard')
       } else {
         toast.error('Failed to start trial. Please try again.')
       }
@@ -88,7 +92,8 @@ export default function ChoosePlan() {
       })
       toast.success('Subscription request sent')
       setPayModalOpen(false)
-      window.location.href = '/dashboard'
+      queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
+      navigate('/dashboard')
     } catch (err) {
       // global error handler covers toast
     } finally {
