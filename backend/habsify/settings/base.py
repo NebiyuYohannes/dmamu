@@ -184,8 +184,9 @@ CORS_ALLOW_HEADERS = list(default_headers) + ["authorization", "content-type"]
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        'TIMEOUT': 300,
+        # "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        # 'TIMEOUT': 300,
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
     }
 }
 
