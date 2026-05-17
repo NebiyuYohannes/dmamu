@@ -2,7 +2,7 @@ from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import viewsets,mixins,generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework.decorators import action
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
@@ -10,6 +10,7 @@ from rest_framework import status
 from django.core.cache import cache
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.parsers import MultiPartParser, FormParser
+
 from .models import Feature, SubscriptionPlan,Subscription,Payment,PaymentMethod,BankAccount
 from crm.permissions import HasActiveSubscription 
 from .permissions import IsOwnerOrAdmin,HasValidSubscription
@@ -27,6 +28,7 @@ from .serializers import (SubscriptionPlanSerializer,
 class SubscriptionPlanViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionPlanSerializer
     queryset = SubscriptionPlan.objects.prefetch_related('features')
+    permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
         plans = list(self.get_queryset())
