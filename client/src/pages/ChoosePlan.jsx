@@ -52,9 +52,12 @@ export default function ChoosePlan() {
     try {
       await startFreeTrial(planId)
       toast.success('Trial started successfully!')
-      window.location.href = '/dashboard' // Force reload to re-run ProtectedRoute correctly
+      navigate('/dashboard')
     } catch (err) {
-      // Errors are caught by global error handler
+      if (err?.response?.status === 400 || err?.response?.data?.detail?.includes('already')) {
+        toast.success('Moving to dashboard...')
+        navigate('/dashboard')
+      }
     } finally {
       setProcessing(null)
     }
@@ -83,7 +86,7 @@ export default function ChoosePlan() {
       })
       toast.success('Subscription request sent')
       setPayModalOpen(false)
-      window.location.href = '/dashboard'
+      navigate('/dashboard')
     } catch (err) {
       // global error handler covers toast
     } finally {
