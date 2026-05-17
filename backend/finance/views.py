@@ -11,7 +11,6 @@ from .models import Account, Transaction
 from .serializers import AccountSerializer, TransactionSerializer, ExpenseSerializer
 from django.utils.timezone import now
 
-
 class AccountViewSet(viewsets.ModelViewSet):
     serializer_class = AccountSerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
@@ -52,8 +51,7 @@ def finance_stats(request):
         company = request.user.company
         company_filter = Q(company=company)
     else:
-        company_filter = Q()  
-
+        company_filter = Q()
 
     if request.user.role != 'super_admin':
         accounts = Account.objects.filter(company=company)
@@ -63,27 +61,26 @@ def finance_stats(request):
     search = request.query_params.get('search', '').strip()
     if search:
         accounts = accounts.filter(
-            Q(name__icontains=search) | 
+            Q(name__icontains=search) |
             Q(full_name__icontains=search)
         )
 
-    today = datetime.today().date()                   
+    today = datetime.today().date()
     current_month_start = today.replace(day=1)
     current_month_end = (current_month_start + relativedelta(months=1)) - timedelta(days=1)
-
     last_month_start = current_month_start - relativedelta(months=1)
     last_month_end = current_month_start - timedelta(days=1)
 
-
+    # type='expense'
     total_expenses_current = Transaction.objects.filter(
-        company_filter,                    # ← this is the fix
-        type='outflow',
-        date__date__range=[current_month_start, current_month_end]   # safer with DateTimeField
+        company_filter,
+        type='expense',
+        date__date__range=[current_month_start, current_month_end]
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     total_expenses_last = Transaction.objects.filter(
         company_filter,
-        type='outflow',
+        type='expense',
         date__date__range=[last_month_start, last_month_end]
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
@@ -92,8 +89,9 @@ def finance_stats(request):
         if total_expenses_last else 0
     )
 
-    # Cash on Hand & Banks (unchanged)
-    cash_on_hand = accounts.filter(account_type='cash').aggregate(Sum('balance'))['balance__sum'] or 0
+    cash_on_hand = accounts.filter(
+        account_type='cash'
+    ).aggregate(Sum('balance'))['balance__sum'] or 0
 
     banks = accounts.filter(account_type='bank')
     banks_formatted = [
@@ -103,7 +101,8 @@ def finance_stats(request):
             "account_number": bank.account_number,
             "balance": bank.balance,
             "label": "Available Balance"
-        } for bank in banks
+        }
+        for bank in banks
     ]
 
     return Response({
@@ -128,58 +127,55 @@ def cash_management(request):
     else:
         transactions = Transaction.objects.all()
 
-    # Search by description
     search = request.query_params.get('search')
     if search:
         transactions = transactions.filter(description__icontains=search)
 
-    # Filter by type (inflow / outflow / all)
     trans_type = request.query_params.get('type')
-    if trans_type and trans_type != 'all' and trans_type in ['inflow','outflow']:
+    if trans_type and trans_type != 'all':
         transactions = transactions.filter(type=trans_type)
 
-    # Current Balance = sum of ALL accounts
-    current_balance = Account.objects.filter(company=request.user.company).aggregate(Sum('balance'))['balance__sum'] or 0
+    # Net Worth = sum of all account balances
+    net_worth = Account.objects.filter(
+        company=request.user.company
+    ).aggregate(Sum('balance'))['balance__sum'] or 0
 
-    # This Month Inflows / Outflows
     today = datetime.today()
     current_month_start = today.replace(day=1)
     current_month_end = current_month_start + relativedelta(months=1, days=-1)
 
+    # Profit inflows = revenue + refund_in
     total_inflows = transactions.filter(
-        type='inflow', 
+        type__in=['revenue', 'refund_in'],
         date__range=[current_month_start, current_month_end]
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
+    # Profit outflows = cogs + expense + refund_out
     total_outflows = transactions.filter(
-        type='outflow', 
+        type__in=['cogs', 'expense', 'refund_out'],
         date__range=[current_month_start, current_month_end]
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
-    # Transaction History with running balance
+    #Profit = revenue - costs
+    total_profit = total_inflows - total_outflows
+
     history = transactions.order_by('-date')
-    running_balance = current_balance
-    history_list = []
-
-    for t in history:
-        if t.type == 'inflow':
-            running_balance += t.amount
-        else:
-            running_balance -= t.amount
-
-        history_list.append({
+    history_list = [
+        {
             "id": t.id,
             "description": t.description,
             "date": t.date.strftime("%b %d, %Y • %I:%M %p"),
             "amount": t.amount,
             "type": t.type,
-            # "balance": running_balance
             "balance": t.balance_at_time
-
-        })
+        }
+        for t in history
+    ]
 
     return Response({
-        "current_balance": current_balance,
+        # "net_worth": net_worth,
+        "current_balance": net_worth,
+        "total_profit": total_profit,
         "total_inflows": total_inflows,
         "total_outflows": total_outflows,
         "transaction_history": history_list
@@ -195,3 +191,13 @@ class ExpenseCreateView(generics.CreateAPIView):
             "message": "Expense added successfully",
             "new_balance": serializer.instance.account.balance
         }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def transaction_type_dropdown(request):
+    types = [
+        {"value": value, "label": label}
+        for value, label in Transaction.TYPE_CHOICES
+    ]
+    return Response(types)
