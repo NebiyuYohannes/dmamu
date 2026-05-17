@@ -52,11 +52,13 @@ export default function ChoosePlan() {
     try {
       await startFreeTrial(planId)
       toast.success('Trial started successfully!')
-      navigate('/dashboard')
+      window.location.href = '/dashboard'
     } catch (err) {
       if (err?.response?.status === 400 || err?.response?.data?.detail?.includes('already')) {
         toast.success('Moving to dashboard...')
-        navigate('/dashboard')
+        window.location.href = '/dashboard'
+      } else {
+        toast.error('Failed to start trial. Please try again.')
       }
     } finally {
       setProcessing(null)
@@ -86,7 +88,7 @@ export default function ChoosePlan() {
       })
       toast.success('Subscription request sent')
       setPayModalOpen(false)
-      navigate('/dashboard')
+      window.location.href = '/dashboard'
     } catch (err) {
       // global error handler covers toast
     } finally {
