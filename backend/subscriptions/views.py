@@ -79,7 +79,7 @@ class SubscriptionViewSet(mixins.ListModelMixin,
         return Subscription.objects.filter(company=self.request.user.company)
 
     @method_decorator(csrf_exempt, name='dispatch')
-    @action(detail=False, methods=['post'], serializer_class=FreeTrialSerializer)
+    @action(detail=False, methods=['post'], serializer_class=FreeTrialSerializer,permission_classes=[AllowAny])
     def free_trial(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
