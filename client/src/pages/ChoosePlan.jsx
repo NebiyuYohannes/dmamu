@@ -21,6 +21,7 @@ export default function ChoosePlan() {
   const [payPlan, setPayPlan] = useState(null)
   const [payLoading, setPayLoading] = useState(false)
   const [payForm, setPayForm] = useState({ payment_method: '', bank_account: '', transaction_id: '' })
+
   const isProcessing = useRef(false)
   const isRedirecting = useRef(false)
   
@@ -84,7 +85,6 @@ const redirectToDashboard = async () => {
   }
 }
 
-const isProcessing = useRef(false) 
 
 const handleStartTrial = async (planId) => {
   if (isProcessing.current) return  
