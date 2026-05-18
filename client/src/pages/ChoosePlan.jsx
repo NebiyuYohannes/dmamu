@@ -78,18 +78,27 @@ const redirectToDashboard = async () => {
   }
 }
 
+const isProcessing = useRef(false) 
+
 const handleStartTrial = async (planId) => {
-  setProcessing(planId)
+  if (isProcessing.current) return  
+  isProcessing.current = true
+  setProcessing(planId)           
 
   try {
     await startFreeTrial(planId)
     toast.success('Trial started successfully! 🎉')
-    
     await redirectToDashboard()
+
   } catch (err) {
+    if (isRedirecting.current) return
+
     const detail = err?.response?.data?.detail || err?.response?.data?.error || ''
 
-    if (detail.toLowerCase().includes('already used') || detail.toLowerCase().includes('already')) {
+    if (
+      detail.toLowerCase().includes('already used') ||
+      detail.toLowerCase().includes('already')
+    ) {
       toast.info('You have already used your free trial')
       await redirectToDashboard()
     } else if (err?.response?.status === 400) {
@@ -102,6 +111,7 @@ const handleStartTrial = async (planId) => {
       console.error(err)
     }
   } finally {
+    isProcessing.current = false  
     setProcessing(null)
   }
 }
