@@ -8,17 +8,17 @@ import { useQuery } from '@tanstack/react-query'
 export default function ProtectedRoute() {
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
-
-  const { data: access, isFetching: checkingAccess } = useQuery({
-    queryKey: ['accessStatus'],
-    queryFn: async () => {
-      const res = await api.get('/subscriptions/me/access-status/')
-      setGlobalAccessStatus(res.data)
-      return res.data
-    },
-    enabled: isAuthenticated,
-    staleTime: 15 * 1000 // Cache for 15s to be performant yet strict
-  })
+const { data: access, isFetching: checkingAccess } = useQuery({
+  queryKey: ['accessStatus'],
+  queryFn: async () => {
+    const res = await api.get('/subscriptions/me/access-status/')
+    setGlobalAccessStatus(res.data)
+    return res.data
+  },
+  enabled: isAuthenticated,
+  staleTime: 0,  // Changed from 15 * 1000
+  cacheTime: 0   // Don't keep old data
+})
 
   // We only show full-screen loader if the auth state itself is loading
   // or if we are actively checking access and there's NO cached data yet to render.
