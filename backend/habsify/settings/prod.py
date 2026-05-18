@@ -65,5 +65,6 @@ X_FRAME_OPTIONS = "DENY"
 #         "LOCATION": config("REDIS_URL"),
 #     }
 # }
+CACHE_MIDDLEWARE_SECONDS = 0
 
 print("🔴 Loaded PROD settings")
