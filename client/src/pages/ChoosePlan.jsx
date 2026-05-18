@@ -33,7 +33,6 @@ export default function ChoosePlan() {
       })
   }, [])
 
-  // Only load dropdowns when modal is opened, preventing unnecessary aggressive requests
   useEffect(() => {
     let alive = true
     if (payModalOpen) {
@@ -52,26 +51,34 @@ export default function ChoosePlan() {
 
 const redirectToDashboard = async () => {
   try {
-    // Force fresh data from backend and update both React Query + global state
     const freshData = await queryClient.fetchQuery({
       queryKey: ['accessStatus'],
       queryFn: async () => {
-        const res = await api.get('/subscriptions/me/access-status/')
-        setGlobalAccessStatus(res.data)     // Update global state used by ProtectedRoute
+        const res = await api.get('/subscriptions/me/access-status/', {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          cache: 'no-store'
+        })
+        
+        setGlobalAccessStatus(res.data)
         return res.data
       },
-      staleTime: 0,                         // Force real network call
+      staleTime: 0,
+      cacheTime: 0,
     })
 
-    // Only navigate if we truly have access now
     if (freshData?.can_enter_app === true) {
+      toast.success('Redirecting to dashboard...')
       navigate('/dashboard', { replace: true })
     } else {
-      toast.error("Trial started but access not granted yet. Please refresh.")
+      toast.error("Trial started but still seeing NO_PLAN. Please refresh page.")
+      console.log("Fresh data received:", freshData)
     }
   } catch (err) {
     console.error("Access status fetch failed:", err)
-    // Fallback - still navigate (ProtectedRoute will handle it)
     navigate('/dashboard', { replace: true })
   }
 }
