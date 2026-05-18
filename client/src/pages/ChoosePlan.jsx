@@ -51,16 +51,16 @@ export default function ChoosePlan() {
   }, [payModalOpen])
 
 const redirectToDashboard = async () => {
+  if (isRedirecting.current) return
+  isRedirecting.current = true
+
   try {
     queryClient.removeQueries({ queryKey: ['accessStatus'] })
 
     const freshData = await queryClient.fetchQuery({
       queryKey: ['accessStatus'],
       queryFn: async () => {
-        const res = await api.get('/subscriptions/me/access-status/', {
-          headers: { 'Cache-Control': 'no-cache' }
-        })
-
+        const res = await api.get('/subscriptions/me/access-status/')
         setGlobalAccessStatus(res.data)
         return res.data
       },
@@ -72,10 +72,12 @@ const redirectToDashboard = async () => {
       window.location.replace('/dashboard')
     } else {
       toast.error('Access not ready yet. Please refresh.')
+      isRedirecting.current = false
     }
   } catch (err) {
     console.error(err)
     toast.error('Something went wrong. Please refresh.')
+    isRedirecting.current = false
   }
 }
 
