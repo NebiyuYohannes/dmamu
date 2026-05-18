@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { getSubscriptionPlans, startFreeTrial, getPaymentMethods, getBankAccounts, subscribeAndPay } from '../services/subscriptionService'
 import toast from '../services/toastService'
 import api, { setGlobalAccessStatus } from '../services/api' 
-import { useRef } from 'react';
 
 export default function ChoosePlan() {
   const { user } = useAuth()
@@ -21,6 +20,10 @@ export default function ChoosePlan() {
   const [payPlan, setPayPlan] = useState(null)
   const [payLoading, setPayLoading] = useState(false)
   const [payForm, setPayForm] = useState({ payment_method: '', bank_account: '', transaction_id: '' })
+
+  // ─── CONTROL REFS (PREVENTS DOUBLE-CLICKS & RUNTIME CRASHES) ───
+  const isProcessing = useRef(false) 
+  const isRedirecting = useRef(false) // ✅ FIXED: Added missing ref declaration!
 
   useEffect(() => {
     getSubscriptionPlans()
@@ -50,74 +53,110 @@ export default function ChoosePlan() {
     return () => { alive = false }
   }, [payModalOpen])
 
-const redirectToDashboard = async () => {
-  if (isRedirecting.current) return
-  isRedirecting.current = true
+  // ─── SAFE RETRY LOGIC (WAITS FOR BACKEND DB TO FINISH SAVING) ───
+  const redirectToDashboard = async () => {
+    if (isRedirecting.current) return
+    isRedirecting.current = true
 
-  try {
-    queryClient.removeQueries({ queryKey: ['accessStatus'] })
+    const toastId = toast.loading('Verifying your workspace access...')
 
-    const freshData = await queryClient.fetchQuery({
-      queryKey: ['accessStatus'],
-      queryFn: async () => {
-        const res = await api.get('/subscriptions/me/access-status/')
-        setGlobalAccessStatus(res.data)
-        return res.data
-      },
-      staleTime: 0,
-      gcTime: 0,
-    })
+    try {
+      let retries = 0
+      const maxRetries = 5
+      let freshData = null
 
-    if (freshData?.can_enter_app) {
-      window.location.replace('/dashboard')
-    } else {
-      toast.error('Access not ready yet. Please refresh.')
+      // Loop up to 5 times to wait for the database to finish updating status
+      while (retries < maxRetries) {
+        queryClient.removeQueries({ queryKey: ['accessStatus'] })
+
+        freshData = await queryClient.fetchQuery({
+          queryKey: ['accessStatus'],
+          queryFn: async () => {
+            const res = await api.get('/subscriptions/me/access-status/') // ✅ NO special headers to avoid CORS preflight crashes
+            return res.data
+          },
+          staleTime: 0,
+          gcTime: 0,
+        })
+
+        if (freshData?.can_enter_app === true) {
+          break // Success! Exit loop early
+        }
+
+        retries++
+        await new Promise(resolve => setTimeout(resolve, 500)) // Silent 500ms delay before retrying
+      }
+
+      if (freshData?.can_enter_app) {
+        setGlobalAccessStatus(freshData)
+        
+        toast.update(toastId, {
+          render: 'Workspace ready! Redirecting...',
+          type: 'success',
+          isLoading: false,
+          autoClose: 1500
+        })
+
+        setTimeout(() => {
+          window.location.replace('/dashboard') // Hard replace clears react-query caches completely
+        }, 1200)
+
+      } else {
+        toast.update(toastId, {
+          render: 'Setup is taking slightly longer. Please refresh the page.',
+          type: 'error',
+          isLoading: false,
+          autoClose: 4000
+        })
+        isRedirecting.current = false
+      }
+    } catch (err) {
+      console.error('Redirect failed:', err)
+      toast.update(toastId, {
+        render: 'Something went wrong. Please refresh the page.',
+        type: 'error',
+        isLoading: false,
+        autoClose: 3000
+      })
       isRedirecting.current = false
     }
-  } catch (err) {
-    console.error(err)
-    toast.error('Something went wrong. Please refresh.')
-    isRedirecting.current = false
   }
-}
 
-const isProcessing = useRef(false) 
+  // ─── START TRIAL EVENT HANDLER ───
+  const handleStartTrial = async (planId) => {
+    if (isProcessing.current || isRedirecting.current) return  
+    isProcessing.current = true
+    setProcessing(planId)           
 
-const handleStartTrial = async (planId) => {
-  if (isProcessing.current) return  
-  isProcessing.current = true
-  setProcessing(planId)           
-
-  try {
-    await startFreeTrial(planId)
-    toast.success('Trial started successfully! 🎉')
-    await redirectToDashboard()
-
-  } catch (err) {
-    if (isRedirecting.current) return
-
-    const detail = err?.response?.data?.detail || err?.response?.data?.error || ''
-
-    if (
-      detail.toLowerCase().includes('already used') ||
-      detail.toLowerCase().includes('already')
-    ) {
-      toast.info('You have already used your free trial')
+    try {
+      await startFreeTrial(planId)
+      toast.success('Trial started successfully! 🎉')
       await redirectToDashboard()
-    } else if (err?.response?.status === 400) {
-      toast.error(detail || 'Invalid request')
-    } else if (err?.response?.status === 401) {
-      toast.error('Session expired. Please login again.')
-      navigate('/login', { replace: true })
-    } else {
-      toast.error('Failed to start trial. Please try again.')
-      console.error(err)
+    } catch (err) {
+      if (isRedirecting.current) return
+
+      const detail = err?.response?.data?.detail || err?.response?.data?.error || ''
+
+      if (
+        detail.toLowerCase().includes('already used') ||
+        detail.toLowerCase().includes('already')
+      ) {
+        toast.info('You have already used your free trial')
+        await redirectToDashboard()
+      } else if (err?.response?.status === 400) {
+        toast.error(detail || 'Invalid request')
+      } else if (err?.response?.status === 401) {
+        toast.error('Session expired. Please login again.')
+        navigate('/login', { replace: true })
+      } else {
+        toast.error('Failed to start trial. Please try again.')
+        console.error(err)
+      }
+    } finally {
+      isProcessing.current = false  
+      setProcessing(null)
     }
-  } finally {
-    isProcessing.current = false  
-    setProcessing(null)
   }
-}
 
   const handleSubscribe = (plan) => {
     setPayPlan(plan)
@@ -140,24 +179,24 @@ const handleStartTrial = async (planId) => {
         bank_account: Number(payForm.bank_account),
         transaction_id: payForm.transaction_id.trim()
       })
-    toast.success('Subscription request sent! Awaiting approval.')
-    setPayModalOpen(false)
-    
-    await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
+      toast.success('Subscription request sent! Awaiting approval.')
+      setPayModalOpen(false)
+      
+      await queryClient.invalidateQueries({ queryKey: ['accessStatus'] })
 
-    const updatedAccess = await queryClient.fetchQuery({ 
-      queryKey: ['accessStatus'],
-      queryFn: async () => {
-        const res = await api.get('/subscriptions/me/access-status/')
-        return res.data
+      const updatedAccess = await queryClient.fetchQuery({ 
+        queryKey: ['accessStatus'],
+        queryFn: async () => {
+          const res = await api.get('/subscriptions/me/access-status/')
+          return res.data
+        }
+      })
+      
+      if (updatedAccess?.can_enter_app) {
+        navigate('/dashboard', { replace: true })
       }
-    })
-    
-    if (updatedAccess?.can_enter_app) {
-      navigate('/dashboard', { replace: true })
-    }
     } catch (err) {
-      // global error handler covers toast
+      // handled globally
     } finally {
       setPayLoading(false)
     }
@@ -213,14 +252,15 @@ const handleStartTrial = async (planId) => {
               <div className="space-y-3 pt-2">
                 <button
                   onClick={() => handleStartTrial(plan.id)}
-                  disabled={processing === plan.id}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-primary text-sm font-medium rounded-lg text-primary bg-white hover:bg-primary/5 transition-colors disabled:opacity-50"
+                  disabled={processing === plan.id || isRedirecting.current}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-primary text-sm font-medium rounded-lg text-primary bg-white hover:bg-primary/5 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {processing === plan.id ? 'Processing...' : 'Start 14-Day Free Trial'}
                 </button>
                 <button
                   onClick={() => handleSubscribe(plan)}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 transition-colors shadow-sm"
+                  disabled={isRedirecting.current}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:pointer-events-none"
                 >
                   Subscribe / Pay
                 </button>
