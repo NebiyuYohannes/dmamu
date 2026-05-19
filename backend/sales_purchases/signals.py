@@ -2,16 +2,24 @@ import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
-from inventory.models import StockMovement, Inventory
 from django.db import transaction
-from sales_purchases.models import Purchase, Sale
+
+from inventory.models import StockMovement, Inventory
+from sales_purchases.models import Purchase, Sale, PaymentStatus
 from notifications.models import Notification
 
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# STOCK MOVEMENT - SALE
+# ============================================================
 @receiver(post_save, sender=Sale, dispatch_uid="create_stock_movement_for_sale")
 def create_stock_movement_for_sale(sender, instance, created, **kwargs):
+    """
+    Every new sale reduces stock regardless of payment status.
+    Stock leaves warehouse when sale is created.
+    """
     if not created:
         return
     if not instance.item or not instance.warehouse:
@@ -23,10 +31,14 @@ def create_stock_movement_for_sale(sender, instance, created, **kwargs):
             warehouse=instance.warehouse
         )
     except Inventory.DoesNotExist:
-        raise ValueError(f"No inventory found for {instance.item} in {instance.warehouse}")
+        raise ValueError(
+            f"No inventory found for {instance.item} in {instance.warehouse}"
+        )
 
     if inventory.current_stock < instance.quantity:
-        raise ValidationError(f"Not enough stock in {inventory.warehouse.name}")
+        raise ValidationError(
+            f"Not enough stock in {inventory.warehouse.name}"
+        )
 
     if StockMovement.objects.filter(sale=instance, inventory=inventory).exists():
         return
@@ -41,8 +53,15 @@ def create_stock_movement_for_sale(sender, instance, created, **kwargs):
         )
 
 
+# ============================================================
+# STOCK MOVEMENT - PURCHASE
+# ============================================================
 @receiver(post_save, sender=Purchase, dispatch_uid="create_stock_movement_for_purchase")
 def create_stock_movement_for_purchase(sender, instance, created, **kwargs):
+    """
+    Every new purchase increases stock regardless of payment status.
+    Stock enters warehouse when purchase is created.
+    """
     if not created:
         return
     if not instance.item or not instance.warehouse:
@@ -55,7 +74,9 @@ def create_stock_movement_for_purchase(sender, instance, created, **kwargs):
         defaults={"current_stock": 0, "low_stock_threshold": 5}
     )
 
-    if StockMovement.objects.filter(purchase=instance, inventory=inventory).exists():
+    if StockMovement.objects.filter(
+        purchase=instance, inventory=inventory
+    ).exists():
         return
 
     with transaction.atomic():
@@ -68,18 +89,45 @@ def create_stock_movement_for_purchase(sender, instance, created, **kwargs):
         )
 
 
+# ============================================================
+# FINANCE TRANSACTION - SALE (paid only)
+# ============================================================
 @receiver(post_save, sender=Sale, dispatch_uid='handle_sale_payment_unique')
 def handle_sale_payment(sender, instance, created, **kwargs):
+    """
+    PAID:
+      Auto-creates Transaction(type='revenue', amount=total)
+      Account balance increases by full amount
+      Sale status → 'paid'
+
+    PARTIAL:
+      NO auto transaction created here
+      User creates Transaction(type='revenue', linked_sale=sale) manually
+      Each manual transaction calls sale.update_status() automatically
+      Status updates to 'partial' or 'paid' based on remaining balance
+
+    UNPAID:
+      NO transaction created
+      User pays later via manual Transaction
+    """
     if not created:
         return
-    if instance.status != 'paid' or not instance.account:
+
+    # Only auto-handle 'paid' status
+    if instance.status != PaymentStatus.PAID:
+        return
+
+    if not instance.account:
         return
 
     reference = f"SALE-{instance.id}"
 
     from finance.models import Transaction as FinanceTransaction
+
     if FinanceTransaction.objects.filter(reference=reference).exists():
-        logger.warning(f"Transaction already exists for {reference}, skipping creation")
+        logger.warning(
+            f"Transaction already exists for {reference}, skipping"
+        )
         return
 
     if instance.transactions.exists():
@@ -89,28 +137,55 @@ def handle_sale_payment(sender, instance, created, **kwargs):
         FinanceTransaction.objects.create(
             company=instance.company,
             account=instance.account,
-            type='revenue', 
+            type='revenue',                    # customer paid you → money IN
             amount=instance.total,
             description=f"Sale to {instance.customer.name if instance.customer else 'Customer'}",
             reference=reference,
             notes=f"Payment Method: {instance.payment_method}\n{instance.notes or ''}",
             linked_sale=instance
         )
-        instance.update_status()
+        # Note: Transaction.save() already calls instance.update_status()
 
 
+# ============================================================
+# FINANCE TRANSACTION - PURCHASE (paid only)
+# ============================================================
 @receiver(post_save, sender=Purchase, dispatch_uid='handle_purchase_payment_unique')
 def handle_purchase_payment(sender, instance, created, **kwargs):
+    """
+    PAID:
+      Auto-creates Transaction(type='cogs', amount=total)
+      Account balance decreases by full amount
+      Purchase status → 'paid'
+
+    PARTIAL:
+      NO auto transaction created here
+      User creates Transaction(type='cogs', linked_purchase=purchase) manually
+      Each manual transaction calls purchase.update_status() automatically
+      Status updates to 'partial' or 'paid' based on remaining balance
+
+    UNPAID:
+      NO transaction created
+      User pays later via manual Transaction
+    """
     if not created:
         return
-    if instance.status != 'paid' or not instance.account:
+
+    # Only auto-handle 'paid' status
+    if instance.status != PaymentStatus.PAID:
+        return
+
+    if not instance.account:
         return
 
     reference = f"PURCHASE-{instance.id}"
 
     from finance.models import Transaction as FinanceTransaction
+
     if FinanceTransaction.objects.filter(reference=reference).exists():
-        logger.warning(f"Transaction already exists for {reference}, skipping creation")
+        logger.warning(
+            f"Transaction already exists for {reference}, skipping"
+        )
         return
 
     if instance.transactions.exists():
@@ -120,31 +195,34 @@ def handle_purchase_payment(sender, instance, created, **kwargs):
         FinanceTransaction.objects.create(
             company=instance.company,
             account=instance.account,
-            type='cogs', 
+            type='cogs',                      
             amount=instance.total,
             description=f"Purchase from {instance.supplier.name if instance.supplier else 'Supplier'}",
             reference=reference,
             notes=f"Payment Method: {instance.payment_method}\n{instance.notes or ''}",
             linked_purchase=instance
         )
-        instance.update_status()
-
+        # Note: Transaction.save() already calls instance.update_status()
 
 @receiver(post_save, sender=StockMovement)
 def trigger_low_stock_notification(sender, instance, created, **kwargs):
-    if created:
-        inventory = instance.inventory
-        if instance.movement_type in ['sale', 'transfer_out'] or (
-            instance.movement_type == 'adjustment' and instance.quantity < 0
-        ):
-            if inventory.is_low_stock:
-                Notification.objects.create(
-                    company=inventory.company,
-                    user=inventory.company.owner,
-                    type='low_stock',
-                    message=(
-                        f"{inventory.item.name} stock low in "
-                        f"{inventory.warehouse.name}: {inventory.current_stock} left "
-                        f"(threshold {inventory.low_stock_threshold})"
-                    )
-                )
+    if not created:
+        return
+
+    inventory = instance.inventory
+    stock_reducing = (
+        instance.movement_type in ['sale', 'transfer_out'] or
+        (instance.movement_type == 'adjustment' and instance.quantity < 0)
+    )
+
+    if stock_reducing and inventory.is_low_stock:
+        Notification.objects.create(
+            company=inventory.company,
+            user=inventory.company.owner,
+            type='low_stock',
+            message=(
+                f"{inventory.item.name} stock low in "
+                f"{inventory.warehouse.name}: {inventory.current_stock} left "
+                f"(threshold {inventory.low_stock_threshold})"
+            )
+        )
