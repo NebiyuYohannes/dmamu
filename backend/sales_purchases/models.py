@@ -37,23 +37,34 @@ class Sale(models.Model):
     
     @property
     def balance(self):
-        paid = self.transactions.aggregate(
-            total_paid=Sum('amount')
-        )['total_paid'] or 0
-
-        return self.total - paid
+        """
+        How much customer still owes.
+        revenue    = customer paid you        (reduces balance)
+        refund_out = you refunded customer    (increases balance)
+        """
+        agg = self.transactions.aggregate(
+            total_received=Sum('amount', filter=Q(type='revenue')),
+            total_refunded=Sum('amount', filter=Q(type='refund_out')),
+        )
+        total_received = agg['total_received'] or 0
+        total_refunded = agg['total_refunded'] or 0
+        net_received = total_received - total_refunded
+        return self.total - net_received
 
     def update_status(self):
         balance = self.balance
 
-        if balance == 0:
-            status = PaymentStatus.PAID
-        elif balance > 0:
-            status = PaymentStatus.PARTIAL
+        if balance < 0:
+            new_status = PaymentStatus.OVERPAID
+        elif balance == 0:
+            new_status = PaymentStatus.PAID
+        elif balance == self.total:
+            new_status = PaymentStatus.UNPAID
         else:
-            status = PaymentStatus.OVERPAID 
+            new_status = PaymentStatus.PARTIAL
 
-        Sale.objects.filter(pk=self.pk).update(status=status)
+        Sale.objects.filter(pk=self.pk).update(status=new_status)
+
 
 class Purchase(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
@@ -75,28 +86,30 @@ class Purchase(models.Model):
 
     @property
     def balance(self):
+        """
+        How much you still owe supplier.
+        cogs      = you paid supplier         (reduces balance)
+        refund_in = supplier refunded you     (increases balance)
+        """
         agg = self.transactions.aggregate(
-            total_out=Sum('amount', filter=Q(type='outflow')),
-            total_in=Sum('amount', filter=Q(type='inflow')),
+            total_paid=Sum('amount', filter=Q(type='cogs')),
+            total_refunded=Sum('amount', filter=Q(type='refund_in')),
         )
-
-        total_out = agg['total_out'] or 0
-        total_in = agg['total_in'] or 0
-
-        net_paid = total_out - total_in
+        total_paid = agg['total_paid'] or 0
+        total_refunded = agg['total_refunded'] or 0
+        net_paid = total_paid - total_refunded
         return self.total - net_paid
-    
 
     def update_status(self):
         balance = self.balance
 
-        if balance == 0:
-            status = PaymentStatus.PAID
-        elif balance > 0:
-            status = PaymentStatus.PARTIAL
-        elif balance < 0:
-            status = PaymentStatus.OVERPAID
+        if balance < 0:
+            new_status = PaymentStatus.OVERPAID
+        elif balance == 0:
+            new_status = PaymentStatus.PAID
+        elif balance == self.total:
+            new_status = PaymentStatus.UNPAID
         else:
-            status = PaymentStatus.UNPAID
+            new_status = PaymentStatus.PARTIAL
 
-        Purchase.objects.filter(pk=self.pk).update(status=status)
+        Purchase.objects.filter(pk=self.pk).update(status=new_status)
