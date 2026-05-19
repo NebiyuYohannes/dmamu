@@ -1,83 +1,121 @@
 import api from './api'
 
-export const getSuppliers = () => api.get('/suppliers/supplier/')
+// ─── Suppliers ───────────────────────────────────────────────
+export const getSuppliers = () =>
+    api.get('/suppliers/supplier/').then(r => r.data)
+
+// ─── Items ───────────────────────────────────────────────────
 export const getItems = (options = {}) => {
-  const { page = 1, search = '', ordering = '', categoryName = '' } = options || {}
+  const { page = 1, search = '', ordering = '', categoryName = '', category__name = '' } = options || {}
   const params = { page }
   if (search) params.search = search
   if (ordering) params.ordering = ordering
   if (categoryName) params['category__name'] = categoryName
-  return api.get('/inventory/items/', { params })
+  if (category__name) params['category__name'] = category__name
+  return api.get('/inventory/items/', { params }).then(r => r.data)
 }
 
+// ─── Categories ──────────────────────────────────────────────
 export const getCategories = (options = {}) => {
   const { page = 1, search = '', ordering = '' } = options || {}
   const params = { page }
   if (search) params.search = search
   if (ordering) params.ordering = ordering
-  return api.get('/inventory/categories/', { params })
+  return api.get('/inventory/categories/', { params }).then(r => r.data)
 }
 
-export const createCategory = (payload) => api.post('/inventory/categories/', payload)
-export const updateCategory = (id, payload) => api.patch(`/inventory/categories/${id}/`, payload)
-export const deleteCategory = (id) => api.delete(`/inventory/categories/${id}/`)
+export const createCategory = (payload) =>
+    api.post('/inventory/categories/', payload).then(r => r.data)
 
+export const updateCategory = (id, payload) =>
+    api.patch(`/inventory/categories/${id}/`, payload).then(r => r.data)
+
+export const deleteCategory = (id) =>
+    api.delete(`/inventory/categories/${id}/`).then(r => r.data)
+
+// ─── Warehouses ──────────────────────────────────────────────
 export const getWarehouses = (options = {}) => {
   const { search = '', ordering = '', name = '' } = options || {}
   const params = {}
   if (search) params.search = search
-  // support pagination
   if (options.page) params.page = options.page
   if (ordering) params.ordering = ordering
   if (name) params.name = name
-  return api.get('/inventory/warehouses/', { params })
+  return api.get('/inventory/warehouses/', { params }).then(r => r.data)
 }
 
-export const createWarehouse = (payload) => api.post('/inventory/warehouses/', payload)
-export const updateWarehouse = (id, payload) => api.patch(`/inventory/warehouses/${id}/`, payload)
-export const deleteWarehouse = (id) => api.delete(`/inventory/warehouses/${id}/`)
+export const createWarehouse = (payload) =>
+    api.post('/inventory/warehouses/', payload).then(r => r.data)
 
+export const updateWarehouse = (id, payload) =>
+    api.patch(`/inventory/warehouses/${id}/`, payload).then(r => r.data)
+
+export const deleteWarehouse = (id) =>
+    api.delete(`/inventory/warehouses/${id}/`).then(r => r.data)
+
+// ─── Warehouse Products / Detail ─────────────────────────────
 export const getWarehouseProducts = (id, options = {}) => {
-  const { inventory_search = '', category = '', inventory_ordering = '' } = options || {}
+  const {
+    inventory_search = '',
+    category = '',
+    inventory_ordering = ''
+  } = options || {}
   const params = {}
   if (inventory_search) params.inventory_search = inventory_search
   if (category) params.category = category
-  // support pagination
   if (options.page) params.page = options.page
   if (inventory_ordering) params.inventory_ordering = inventory_ordering
-  return api.get(`/inventory/warehouses/${id}/`, { params })
+  return api.get(`/inventory/warehouses/${id}/`, { params }).then(r => r.data)
 }
 
-// Future: Add POST, PUT, DELETE as needed
-export const createPurchase = (payload) => api.post('/sales-purchases/purchases/', payload)
-// export const createSale = (payload) => api.post('/inventory/sales/')
-// export const updateStock = (id, data) => api.patch(`/inventory/items/${id}/`, data)
-
-// Alias for backward compatibility: some components expect getInventoryDetail
+// Alias for backward compatibility
 export const getInventoryDetail = getWarehouseProducts
-export const createItem = (payload) => api.post('/inventory/items/', payload)
-export const updateItem = (id, payload) => api.patch(`/inventory/items/${id}/`, payload)
-export const deleteItem = (id) => api.delete(`/inventory/items/${id}/`)
 
+// ─── Items CRUD ───────────────────────────────────────────────
+export const createItem = (payload) =>
+    api.post('/inventory/items/', payload).then(r => r.data)
+
+export const updateItem = (id, payload) =>
+    api.patch(`/inventory/items/${id}/`, payload).then(r => r.data)
+
+export const deleteItem = (id) =>
+    api.delete(`/inventory/items/${id}/`).then(r => r.data)
+
+// ─── Stock Movements ─────────────────────────────────────────
 export const getStockMovements = (options = {}) => {
   const { page = 1, search = '', ordering = '' } = options || {}
   const params = { page }
   if (search) params.search = search
   if (ordering) params.ordering = ordering
-  return api.get('/inventory/stock-movements/', { params })
+  return api.get('/inventory/stock-movements/', { params }).then(r => r.data)
 }
 
-export const getStockMovementDetail = (id) => api.get(`/inventory/stock-movements/${id}/`)
-export const createStockMovement = (payload) => api.post('/inventory/stock-movements/', payload)
-export const updateStockMovement = (id, payload) => api.patch(`/inventory/stock-movements/${id}/`, payload)
-export const deleteStockMovement = (id) => api.delete(`/inventory/stock-movements/${id}/`)
+export const getStockMovementDetail = (id) =>
+    api.get(`/inventory/stock-movements/${id}/`).then(r => r.data)
 
+export const createStockMovement = (payload) =>
+    api.post('/inventory/stock-movements/', payload).then(r => r.data)
+
+export const updateStockMovement = (id, payload) =>
+    api.patch(`/inventory/stock-movements/${id}/`, payload).then(r => r.data)
+
+export const deleteStockMovement = (id) =>
+    api.delete(`/inventory/stock-movements/${id}/`).then(r => r.data)
+
+// ─── Dropdowns ───────────────────────────────────────────────
 export const getInventoryDropdown = (options = {}) => {
   const { search = '' } = options || {}
   const params = {}
   if (search) params.search = search
-  return api.get('/inventory/inventory-dropdown/', { params })
+  return api.get('/inventory/inventory-dropdown/', { params }).then(r => r.data)
 }
 
-export const getPurchaseDropdown = () => api.get('/sales-purchases/purchase-dropdown/')
-export const getSaleDropdown = () => api.get('/sales-purchases/sale-dropdown/')
+export const getPurchaseDropdown = () =>
+    api.get('/sales-purchases/purchase-dropdown/').then(r => r.data)
+
+export const getSaleDropdown = () =>
+    api.get('/sales-purchases/sale-dropdown/').then(r => r.data)
+
+// ─── Purchases ───────────────────────────────────────────────
+export const createPurchase = (payload) =>
+    api.post('/sales-purchases/purchases/', payload).then(r => r.data)
