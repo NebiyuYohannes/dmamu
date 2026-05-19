@@ -1,25 +1,43 @@
 import React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { cn } from '../utils/cn'
+
+const TABS = [
+    { path: '/inventory', label: 'Warehouses' },
+    { path: '/inventory/items', label: 'Items' },
+    { path: '/inventory/stock-movements', label: 'Stock Movements' },
+    { path: '/inventory/categories', label: 'Categories' },
+]
 
 export default function InventoryTabs() {
-  const navigate = useNavigate()
-  const location = useLocation()
+    const navigate = useNavigate()
+    const location = useLocation()
 
-  function isActiveTab(path) {
-    return location.pathname === path || location.pathname === `${path}/`
-  }
+    const currentPath = location.pathname.replace(/\/$/, '')
 
-  function tabClass(path) {
-    return `px-3 py-2 text-sm border rounded-lg ${isActiveTab(path) ? 'bg-primary text-white border-primary' : 'border-gray-200 hover:bg-gray-50'}`
-  }
+    function isActive(path) {
+        return currentPath === path
+    }
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      <button type="button" onClick={() => navigate('/inventory')} className={tabClass('/inventory')}>Warehouses</button>
-      <button type="button" onClick={() => navigate('/inventory/items/')} className={tabClass('/inventory/items')}>Items</button>
-      <button type="button" onClick={() => navigate('/inventory/stock-movements/')} className={tabClass('/inventory/stock-movements')}>Stock Movements</button>
-      <button type="button" onClick={() => navigate('/inventory/categories/')} className={tabClass('/inventory/categories')}>Categories</button>
-    </div>
-  )
+    return (
+        <div className="flex flex-wrap gap-2">
+            {TABS.map(({ path, label }) => (
+                <button
+                    key={path}
+                    type="button"
+                    onClick={() => {
+                        if (!isActive(path)) navigate(path)
+                    }}
+                    className={cn(
+                        'px-3 py-2 text-sm border rounded-lg transition-colors',
+                        isActive(path)
+                            ? 'bg-primary text-white border-primary'
+                            : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                    )}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    )
 }
-
