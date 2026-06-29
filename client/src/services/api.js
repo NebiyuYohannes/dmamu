@@ -2,8 +2,11 @@ import axios from 'axios';
 import { getToken } from './authService'
 import { attachGlobalErrorHandler } from './globalErrorHandler'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+
 const api = axios.create({
-    baseURL: 'https://habsifybackend-prod-7a317b11fa8d.herokuapp.com',
+    baseURL: API_URL,
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
