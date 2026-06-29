@@ -5,8 +5,6 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth.tokens import default_token_generator
-from django.template.loader import render_to_string
-from django.core.mail import EmailMultiAlternatives
 from djoser.utils import encode_uid
 from djoser.email import ActivationEmail
 from rest_framework.exceptions import ValidationError
@@ -89,43 +87,27 @@ def send_activation_email(user, request=None):
     ActivationEmail(request=request, context=context).send([user.email])
 
 def send_otp_email(user, otp_code, purpose, request=None):
-    """Send OTP via email (synchronous)."""
+    """
+    Dispatch an async Celery task to send the OTP email.
+
+    Sending email synchronously inside a Gunicorn worker causes WORKER TIMEOUT
+    on Railway because the SMTP TCP handshake blocks the request thread.
+    Offloading to a Celery task keeps the HTTP response fast.
+    """
     if not user.email:
         logger.error("User has no email address")
         return False
 
-    context = {
-        "user": user,
-        "code": otp_code,
-        "purpose": purpose,
-        "minutes": settings.OTP_EXPIRY_SECONDS // 60,
-    }
+    from accounts.tasks import send_otp_email_task  # avoid circular at module level
 
-    subject = f"Your {purpose.capitalize()} Verification Code"
-
-    text_body = f"Your verification code is {otp_code}. It expires in {context['minutes']} minutes."
-    
-    try:
-        html_body = render_to_string("emails/otp_email.html", context)
-    except Exception as e:
-        logger.error(f"Failed to render OTP email template: {e}")
-        html_body = text_body 
-
-    email = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[user.email],
+    send_otp_email_task.delay(
+        user_id=user.pk,
+        user_email=user.email,
+        otp_code=otp_code,
+        purpose=purpose,
     )
-    email.attach_alternative(html_body, "text/html")
-
-    try:
-        email.send(fail_silently=True)
-        logger.info(f"OTP email sent successfully to {user.email} for {purpose}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send OTP email to {user.email}: {e}", exc_info=True)
-        raise
+    logger.info(f"Queued OTP email task for {user.email} ({purpose})")
+    return True
 
 
 def generate_reset_token(user):
