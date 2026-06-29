@@ -7,7 +7,7 @@ import sys
 def main():
     """Run administrative tasks."""
     # Default to dev — production explicitly sets DJANGO_SETTINGS_MODULE
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "habsify.settings.dev")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "habsify.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
