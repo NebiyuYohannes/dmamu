@@ -196,4 +196,11 @@ LOGGING = {
         "account": {"handlers": ["console"], "level": "INFO"},
     },
 }
+print(
+    EMAIL_HOST,
+    EMAIL_PORT,
+    EMAIL_USE_TLS,
+    EMAIL_USE_SSL,
+    type(EMAIL_USE_SSL)
+)
 CACHE_MIDDLEWARE_SECONDS = 0
