@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python312", "gcc", "libpq"]
+
+[phases.install]
+cmds = [
+    "pip install uv",
+    "uv sync --frozen"
+]
+
+[start]
+cmd = "gunicorn habsify.wsgi:application --workers 2 --threads 2 --timeout 120 --access-logfile - --error-logfile -"
