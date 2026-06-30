@@ -26,7 +26,10 @@ CLIENT_URL = config("CLIENT_URL", default="https://habsify.up.railway.app")
 SITE_PROTOCOL = config("SITE_PROTOCOL", default="https")
 
 # EMAIL
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+ANYMAIL = {
+    "RESEND_API_KEY": config("RESEND_API_KEY", default=""),
+}
 
 # CORS & CSRF
 CORS_ALLOWED_ORIGINS = [

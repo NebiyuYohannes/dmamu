@@ -4,7 +4,7 @@ nixPkgs = ["python312", "gcc", "libpq"]
 [phases.install]
 cmds = [
     "pip install uv",
-    "uv sync --frozen"
+    "uv sync"
 ]
 
 [start]
