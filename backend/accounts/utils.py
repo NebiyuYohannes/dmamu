@@ -86,27 +86,56 @@ def send_activation_email(user, request=None):
 
     ActivationEmail(request=request, context=context).send([user.email])
 
+import threading
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
+
+def _send_otp_email_thread(user_email, otp_code, purpose):
+    """
+    Background thread target for sending email.
+    """
+    try:
+        context = {
+            "code": otp_code,
+            "purpose": purpose,
+            "minutes": settings.OTP_EXPIRY_SECONDS // 60,
+        }
+        subject = f"Your {purpose.capitalize()} Verification Code"
+        text_body = f"Your verification code is {otp_code}. It expires in {context['minutes']} minutes."
+        
+        try:
+            html_body = render_to_string("emails/otp_email.html", context)
+        except Exception:
+            html_body = text_body
+
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user_email],
+        )
+        email.attach_alternative(html_body, "text/html")
+        email.send(fail_silently=False)
+        logger.info(f"Threaded OTP email sent successfully to {user_email}")
+    except Exception as exc:
+        logger.error(f"Threaded OTP email failed to send to {user_email}: {exc}", exc_info=True)
+
+
 def send_otp_email(user, otp_code, purpose, request=None):
     """
-    Dispatch an async Celery task to send the OTP email.
-
-    Sending email synchronously inside a Gunicorn worker causes WORKER TIMEOUT
-    on Railway because the SMTP TCP handshake blocks the request thread.
-    Offloading to a Celery task keeps the HTTP response fast.
+    Dispatch a Python thread to send the OTP email in the background,
+    avoiding Gunicorn worker timeouts without needing Celery/Redis.
     """
     if not user.email:
         logger.error("User has no email address")
         return False
 
-    from accounts.tasks import send_otp_email_task  # avoid circular at module level
-
-    send_otp_email_task.delay(
-        user_id=user.pk,
-        user_email=user.email,
-        otp_code=otp_code,
-        purpose=purpose,
+    thread = threading.Thread(
+        target=_send_otp_email_thread,
+        args=(user.email, otp_code, purpose)
     )
-    logger.info(f"Queued OTP email task for {user.email} ({purpose})")
+    thread.start()
+    logger.info(f"Started background thread for OTP email to {user.email}")
     return True
 
 
